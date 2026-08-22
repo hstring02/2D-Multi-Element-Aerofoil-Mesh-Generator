@@ -1,0 +1,43 @@
+title = "3_el_wing"
+
+## Geometry (All in metres and degrees)
+[foils]
+ELEMENT = ['El_1', 'El_2','EL_3']
+AIRFOIL_FILE = ["AH_79-100_B_Selig.dat", "AH_79-100_B_Selig.dat", "AH_79-100_B_Selig.dat"]
+CHORD = [0.4, 0.2, 0.15]            
+POSITION = [[0.0, 0.0],[0.35, 0.035], [0.49, 0.12]]         
+AOA = [3.0, 25.0, 45.0]              
+TE_THICKNESS = [0.0004, 0.0002, 0.00015]   
+
+[farfield]   
+XMIN = -5.0     
+XMAX = 10.0     
+YMIN = -5.0     
+YMAX = 5.0      
+
+
+## Mesh Parameters
+[global_refinement]
+MESH_MAX = 5.0                  # far field
+CELLS_PER_CHORD = 40            # each element's surface point spacing = its own CHORD / this, so all elements get proportionally equal resolution regardless of size
+GROWTH_RATE = 1.3               # geometric ring-to-ring growth rate away from each airfoil
+TE_CELLS = 5                    # number of mesh cells enforced across each blunt TE base
+MAX_CURVATURE_ANGLE = 10.0      # degrees; max angle a curve (e.g. leading edge) subtends per mesh element
+TE_FAN_ELEMENTS = 8             # inflation layer elements fanned around each blunt TE corner (Gmsh default; tune if corner cells still look skewed)
+
+[boundary_layer]
+ENABLED = true
+FIRST_LAYER_HEIGHT = 0.00002    # wall-normal height of first cell, metres
+GROWTH_RATE = 1.2               # layer-to-layer growth ratio
+THICKNESS = 0.006               # total inflation layer thickness, metres
+
+[wake_refinement]  
+ENABLED = true                  # A refinement box is generated per aerofoil element
+MESH_SIZE = 0.01                # metres; target cell size inside each wake box (between each element's own POINT_SIZE and MESH_MAX)
+X_START_CHORDS = -0.1           # chords downstream of each element's TE where its wake box starts (small gap so it doesn't overlap the near-body/TE fields)
+Y_HALF_HEIGHT_CHORDS = 0.1      # chords of padding above/below each element's own Y-extent (its footprint projected onto the y-axis, so higher-AOA elements already get a taller box before this padding is added)
+
+[te_refinement]
+ENABLED = true
+MESH_SIZE = 0.0001              # metres; target cell size right at each TE corner (finer than each element's own POINT_SIZE)
+DIST_MAX = 0.01                 # metres; distance from the TE corner over which size relaxes back to the surrounding background size (each element's own POINT_SIZE close to the airfoil)
