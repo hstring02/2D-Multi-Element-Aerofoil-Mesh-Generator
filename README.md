@@ -4,15 +4,16 @@ A Python-based mesh generator that uses [Gmsh](https://gmsh.info/) to build 2D C
 
 ## Features / Capabilities
 
+### Mesh Output Formats
+
+Currently only supports modified .unv outputs intended for use with the XCALibre.jl CFD solver. Generic .unv and OpenFOAM coming soon.
+
 ### Mesher (`03_Meshing_Script`)
 
 - **Multi-element geometry** — any number of aerofoil elements per case, each with its own Selig-format `.dat` coordinate file, chord, `(x, y)` position, angle of attack and (optional) blunt trailing-edge thickness.
 - **Config-driven** — every case is defined in a single TOML file (see [`02_Mesh_Input_File`](02_Mesh_Input_File)); no code edits needed for standard runs.
-- **Automatic boolean geometry** — each element is cut from a rectangular farfield domain using Gmsh/OpenCASCADE, with inlet, outlet, farfield (top/bottom) and airfoil boundaries auto-identified and tagged as physical groups.
-- **Per-element sizing** — surface point spacing scales with each element's own chord (`CELLS_PER_CHORD`), so a small flap resolves proportionally as finely as a large main element.
 - **Boundary layer (inflation) meshing** — configurable first-layer height, growth rate and total thickness, with automatic fanning around blunt trailing-edge corners.
-- **Wake refinement** — an AOA-aware refinement box generated per element, sized and oriented to capture each element's own shed wake.
-- **Trailing-edge refinement** — extra local mesh refinement at blunt TE corners, where the flow accelerates sharply.
+- **Wake refinement** — an AOA-scaled refinement box generated per element, sized and oriented to capture each element's own shed wake.
 - **Curvature-based refinement** — cell size adapts to local surface curvature (e.g. leading edges).
 - **XCALibre-ready export** — writes a `.unv` mesh with the Fortran exponent, boundary-group dataset, and node/element numbering fixes required for [XCALibre.jl](https://github.com/mberto79/XCALibre.jl) to read it correctly.
 - **Interactive preview** — the generated mesh opens automatically in the Gmsh GUI for inspection.
@@ -31,19 +32,11 @@ See the [XCALibre.jl repository](https://github.com/mberto79/XCALibre.jl) for fu
 
 ## File / Folder Structure and Workflow
 
-```
-01_Foils/               Aerofoil coordinate files (Selig .dat format)
-02_Mesh_Input_File/      TOML case files defining geometry + mesh parameters
-03_Meshing_Script/       Python/Gmsh mesher (entry point: RUN_SCRIPT.py)
-04_Meshes/               Generated .unv meshes, ready for XCALibre
-05_CFD_Scripts/          Example Julia/XCALibre.jl RANS run scripts
-```
-
 | Folder | Contents |
 |---|---|
 | [`01_Foils`](01_Foils) | Raw aerofoil coordinates (Selig format, one `.dat` per aerofoil) used to build each element. |
 | [`02_Mesh_Input_File`](02_Mesh_Input_File) | Per-case TOML files: element geometry (chord, position, AOA, TE thickness), farfield extents, and all mesh refinement settings. |
-| [`03_Meshing_Script`](03_Meshing_Script) | `RUN_SCRIPT.py` (entry point) plus `MODULE_airfoil.py`, `MODULE_geometry.py`, `MODULE_mesh.py`, `MODULE_output.py`. |
+| [`03_Meshing_Script`](03_Meshing_Script) | `RUN_SCRIPT.py` is used to make the mesh plus various modules containing meshing functions. |
 | [`04_Meshes`](04_Meshes) | Output `.unv` mesh files, named after each TOML file's `title`. |
 | [`05_CFD_Scripts`](05_CFD_Scripts) | Example Julia scripts that load a mesh from `04_Meshes` and run a case in XCALibre.jl. |
 
