@@ -24,7 +24,7 @@ from MODULE_mesh import (
 # LOAD DATA
 # ============================================================
 
-INPUT_FILE = "2_el_wing.toml"
+INPUT_FILE = "3_el_wing.toml"
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else SCRIPT_DIR / "02_Mesh_Input_File" / INPUT_FILE

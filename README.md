@@ -79,12 +79,12 @@ See the [XCALibre.jl repository](https://github.com/mberto79/XCALibre.jl) for fu
 
 ### 2-element wing
 
-<!-- TODO: add image, e.g. ![2-element mesh](docs/images/2_el_wing_mesh.png) -->
+![2-element mesh](docs/2_el_wing_mesh.png)
 
 ### 3-element wing
 
-<!-- TODO: add image, e.g. ![3-element mesh](docs/images/3_el_wing_mesh.png) -->
+![3-element mesh](docs/3_el_wing_mesh.png)
 
 ### CFD results
 
-<!-- TODO: add image, e.g. ![Velocity field](docs/images/velocity_field.png) -->
+![3-element wing CFD](docs/3_el_wing_CFD.png)
