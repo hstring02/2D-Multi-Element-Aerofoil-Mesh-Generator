@@ -4,11 +4,9 @@ A Python-based mesh generator that uses [Gmsh](https://gmsh.info/) to build 2D C
 
 ## Features / Capabilities
 
-### Mesh Output Formats
+### Mesher (`03_Meshing_Script`)
 
 Currently only supports modified .unv outputs intended for use with the XCALibre.jl CFD solver. Generic .unv and OpenFOAM coming soon.
-
-### Mesher (`03_Meshing_Script`)
 
 - **Multi-element geometry** — any number of aerofoil elements per case, each with its own Selig-format `.dat` coordinate file, chord, `(x, y)` position, angle of attack and (optional) blunt trailing-edge thickness.
 - **Config-driven** — every case is defined in a single TOML file (see [`02_Mesh_Input_File`](02_Mesh_Input_File)); no code edits needed for standard runs.
@@ -73,11 +71,14 @@ See the [XCALibre.jl repository](https://github.com/mberto79/XCALibre.jl) for fu
 ### 2-element wing
 
 ![2-element mesh](docs/2_el_wing_mesh.png)
+**[gmsh](https://pypi.org/project/gmsh/)** preview window.
 
 ### 3-element wing
 
 ![3-element mesh](docs/3_el_wing_mesh.png)
+**[gmsh](https://pypi.org/project/gmsh/)** preview window.
 
 ### CFD results
 
 ![3-element wing CFD](docs/3_el_wing_CFD.png)
+Image made in **[ParaView](https://www.paraview.org/)**.
