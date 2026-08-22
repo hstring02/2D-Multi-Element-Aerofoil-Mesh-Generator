@@ -71,14 +71,14 @@ See the [XCALibre.jl repository](https://github.com/mberto79/XCALibre.jl) for fu
 ### 2-element wing
 
 ![2-element mesh](docs/2_el_wing_mesh.png)
-**[gmsh](https://pypi.org/project/gmsh/)** preview window.
+Example **[gmsh](https://pypi.org/project/gmsh/)** preview window.
 
 ### 3-element wing
 
 ![3-element mesh](docs/3_el_wing_mesh.png)
-**[gmsh](https://pypi.org/project/gmsh/)** preview window.
+Example **[gmsh](https://pypi.org/project/gmsh/)** preview window.
 
 ### CFD results
 
 ![3-element wing CFD](docs/3_el_wing_CFD.png)
-Image made in **[ParaView](https://www.paraview.org/)**.
+Contour made with **[ParaView](https://www.paraview.org/)**.
