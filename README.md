@@ -7,6 +7,7 @@
 3. [Pre-requisites](#3-pre-requisites)
 4. [Limitations](#4-limitations)
 5. [Examples](#5-examples)
+6. [Future Work](#6-future-work)
 
 A Python-based mesh generator that uses [Gmsh](https://gmsh.info/) to build 2D CFD grids for multi-element wings (e.g. main element + flap/slat combinations), driven entirely by simple TOML config files. Meshes are exported in a UNV2 format specifically post-processed for direct compatibility with the [XCALibre.jl](https://github.com/mberto79/XCALibre.jl) finite volume CFD solver, and the repo includes example Julia scripts for running RANS cases on the generated grids.
 
@@ -137,3 +138,11 @@ Example **[gmsh](https://pypi.org/project/gmsh/)** preview window.
 
 ![3-element wing CFD](docs/3_el_wing_CFD.png)
 Contour made with **[ParaView](https://www.paraview.org/)**.
+
+## 6. Future Work
+
+- **Generic `.unv` and OpenFOAM export** — broaden the mesher beyond the XCALibre.jl-specific output it currently writes.
+- **Locally-resolved boundary-layer sizing** — replace the single global first-layer-height correlation with a per-point value driven by an actual local velocity estimate (e.g. a lightweight panel method), instead of one freestream-based number applied uniformly around every element.
+- **Multi-parameter batch sweeps** — extend the batch runner beyond a single dotted field to multi-dimensional (grid) sweeps in one run.
+- **Automated mesh-quality and convergence reporting** — surface mesh quality metrics and solver convergence/y+ checks directly from the pipeline instead of relying on manual inspection.
+-**Gradient based optimisation** - Allow batch runs to efficiently find optimal solutions for multi-variable design spaces.
