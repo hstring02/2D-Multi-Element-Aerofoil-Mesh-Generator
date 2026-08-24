@@ -2,8 +2,8 @@ using Plots
 using XCALibre
 using TOML
 
-grids_dir = joinpath(@__DIR__, "..", "..", "04_Meshes")
-toml_dir  = joinpath(@__DIR__, "..", "..", "02_Mesh_Input_File")
+grids_dir = joinpath(@__DIR__, "..", "06_Meshes")
+toml_dir  = joinpath(@__DIR__, "..", "04_Mesh_Input_File")
 grid = "3_el_wing.unv"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different UNV file as the first argument to this script.
 
 if length(ARGS) >= 1

@@ -29,7 +29,7 @@ from MODULE_log import info, success, subtitle
 INPUT_FILE = "3_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
-MESH_INPUT_DIR = SCRIPT_DIR / "02_Mesh_Input_File"
+MESH_INPUT_DIR = SCRIPT_DIR / "04_Mesh_Input_File"
 
 if len(sys.argv) > 1:
     arg_path = Path(sys.argv[1])
@@ -42,7 +42,7 @@ if not CONFIG_PATH.is_file():
 
 data = toml.load(CONFIG_PATH)
 
-FOILS_DIR = SCRIPT_DIR / "01_Foils"
+FOILS_DIR = SCRIPT_DIR / "03_Foils"
 
 XMIN = data["farfield"]["XMIN"]
 XMAX = data["farfield"]["XMAX"]
@@ -336,7 +336,7 @@ output_unv_xcalibre(output_filename)
 node_count = len(gmsh.model.mesh.getNodes()[0])
 element_count = sum(len(tags) for tags in gmsh.model.mesh.getElements()[1])
 
-success(f"Mesh generated and saved to: {SCRIPT_DIR / '04_Meshes' / output_filename}")
+success(f"Mesh generated and saved to: {SCRIPT_DIR / '06_Meshes' / output_filename}")
 
 subtitle("Summary")
 info(f"  nodes    : {node_count}")

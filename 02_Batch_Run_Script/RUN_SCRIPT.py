@@ -17,14 +17,14 @@ from MODULE_batch import (
 # LOAD BATCH CONFIG
 # ============================================================
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+BATCH_INPUT_DIR = REPO_ROOT / "01_Batch_Run_Input_File"
 DEFAULT_CONFIG = "batch_config.toml"    # Defaults to this if no command-line argument is provided.
 
 if len(sys.argv) > 1:
     arg_path = Path(sys.argv[1])
-    CONFIG_PATH = arg_path if arg_path.parent != Path(".") else SCRIPT_DIR / arg_path
+    CONFIG_PATH = arg_path if arg_path.parent != Path(".") else BATCH_INPUT_DIR / arg_path
 else:
-    CONFIG_PATH = SCRIPT_DIR / DEFAULT_CONFIG
+    CONFIG_PATH = BATCH_INPUT_DIR / DEFAULT_CONFIG
 
 if not CONFIG_PATH.is_file():
     raise FileNotFoundError(f"Batch config file not found: {CONFIG_PATH}")
@@ -40,8 +40,8 @@ base_data = toml.load(base_case_path)
 sweep_key = batch_config["sweep_key"]
 sweep_values = batch_config["sweep_values"]
 
-runs_dir = SCRIPT_DIR / "_runs" / batch_name
-results_dir = SCRIPT_DIR / "Results" / batch_name
+runs_dir = REPO_ROOT / "04_Mesh_Input_File" / "Batch" / batch_name
+results_dir = REPO_ROOT / "08_Batch_Run_Results" / batch_name
 
 # ============================================================
 # RUN SWEEP
@@ -63,7 +63,7 @@ try:
             mesh_path = run_mesher(case_toml_path, title)
             row["mesh"] = str(mesh_path)
 
-            result = worker.solve(str(mesh_path))
+            result = worker.solve(str(mesh_path), str(case_toml_path))
             row.update(result)
 
             print(f"[{i + 1}/{len(sweep_values)}] {sweep_key}={value} "
@@ -76,7 +76,7 @@ try:
         rows.append(row)
 
         # The CFD worker is a single long-lived process for the whole sweep
-        # (see 05_CFD_Scripts/Batch/cfd_worker.jl). If it has died, further
+        # (see 07_CFD_Scripts/Batch/cfd_worker.jl). If it has died, further
         # points can't be solved — record the rest as skipped and stop
         # instead of failing through them one at a time.
         if worker.proc.poll() is not None:

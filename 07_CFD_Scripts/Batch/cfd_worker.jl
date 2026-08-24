@@ -1,4 +1,4 @@
-# Persistent k-omega solve worker for the batch manager (00_Batch_Manager).
+# Persistent k-omega solve worker for the batch runner (02_Batch_Run_Script).
 #
 # Runs once and solves any number of meshes fed to it over stdin, so
 # XCALibre's Physics/run! machinery only pays its JIT/precompile cost once
@@ -6,31 +6,26 @@
 # extra Julia package dependency):
 #
 #   stdout, on startup : ##READY##
-#   stdin,  per case    : absolute path to a .unv mesh, or ##QUIT## to exit
+#   stdin,  per case    : <mesh_path>|<toml_path>, or ##QUIT## to exit
 #   stdout, on success  : ##RESULT## <mesh_path>|<Cl>|<Cd>|<lift>|<drag>
 #   stdout, on failure  : ##ERROR## <mesh_path>|<message>
 #
-# The case's flow conditions are read from the .toml in 02_Mesh_Input_File
-# whose filename (minus extension) matches the mesh filename, same as
-# 05_CFD_Scripts/Testing/kw(Arg_based_inputs).jl.
+# toml_path is the flow-config file for the case, supplied explicitly by the
+# caller (02_Batch_Run_Script writes per-case TOMLs under
+# 04_Mesh_Input_File/Batch, not next to a same-named mesh, so it can't be
+# guessed from the mesh path).
 
 using XCALibre
 using TOML
-
-const GRIDS_DIR = joinpath(@__DIR__, "..", "..", "04_Meshes")
-const TOML_DIR  = joinpath(@__DIR__, "..", "..", "02_Mesh_Input_File")
 
 const BACKEND   = CPU()
 const HARDWARE  = Hardware(backend=BACKEND, workgroup=1024)
 activate_multithread(BACKEND)
 
-function run_case(mesh_file::String)
+function run_case(mesh_file::AbstractString, toml_file::AbstractString)
     if !isfile(mesh_file)
         error("Mesh file not found: $mesh_file")
     end
-
-    case_name = splitext(basename(mesh_file))[1]
-    toml_file = joinpath(TOML_DIR, "$(case_name).toml")
     if !isfile(toml_file)
         error("Flow config file not found: $toml_file")
     end
@@ -155,9 +150,9 @@ function main()
         isempty(line) && continue
         line == "##QUIT##" && break
 
-        mesh_file = line
+        mesh_file, toml_file = split(line, "|"; limit=2)
         try
-            r = run_case(mesh_file)
+            r = run_case(mesh_file, toml_file)
             println("##RESULT## $(mesh_file)|$(r.Cl)|$(r.Cd)|$(r.lift)|$(r.drag)")
         catch e
             msg = replace(sprint(showerror, e), "\n" => " | ")

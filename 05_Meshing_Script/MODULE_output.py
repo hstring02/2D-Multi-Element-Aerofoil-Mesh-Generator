@@ -135,7 +135,7 @@ def _renumber_unv(content):
 def output_unv_xcalibre(output_filename):
     gmsh.option.setNumber("Mesh.SaveAll", 1)
     gmsh.option.setNumber("Mesh.SaveElementTagType", 2)
-    path = Path(__file__).resolve().parent.parent / "04_Meshes" / output_filename
+    path = Path(__file__).resolve().parent.parent / "06_Meshes" / output_filename
     gmsh.write(str(path))
 
 

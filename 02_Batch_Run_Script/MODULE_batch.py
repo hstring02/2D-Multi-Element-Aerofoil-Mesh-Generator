@@ -16,9 +16,9 @@ import toml
 SUBPROCESS_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MESHING_DIR = REPO_ROOT / "03_Meshing_Script"
-MESHES_DIR = REPO_ROOT / "04_Meshes"
-CFD_WORKER_SCRIPT = REPO_ROOT / "05_CFD_Scripts" / "Batch" / "cfd_worker.jl"
+MESHING_DIR = REPO_ROOT / "05_Meshing_Script"
+MESHES_DIR = REPO_ROOT / "06_Meshes"
+CFD_WORKER_SCRIPT = REPO_ROOT / "07_CFD_Scripts" / "Batch" / "cfd_worker.jl"
 
 
 # ============================================================
@@ -75,9 +75,10 @@ def build_case_toml(base_data, sweep_key, value, out_dir, index):
 
 def run_mesher(case_toml_path, title):
     """
-    Runs 03_Meshing_Script/RUN_SCRIPT.py on the given case file and returns
-    the resulting .unv path. Raises RuntimeError (with the mesher's stderr)
-    on failure.
+    Runs 05_Meshing_Script/RUN_SCRIPT.py on the given case file, then moves
+    the resulting .unv into 06_Meshes/Batch (keeping batch-run meshes out of
+    the top-level 06_Meshes folder) and returns its new path. Raises
+    RuntimeError (with the mesher's stderr) on failure.
     """
     result = subprocess.run(
         [sys.executable, "RUN_SCRIPT.py", str(case_toml_path)],
@@ -92,11 +93,16 @@ def run_mesher(case_toml_path, title):
             f"Meshing failed for {case_toml_path.name}:\n{result.stderr.strip()}"
         )
 
-    mesh_path = MESHES_DIR / f"{title}.unv"
-    if not mesh_path.is_file():
+    generated_path = MESHES_DIR / f"{title}.unv"
+    if not generated_path.is_file():
         raise RuntimeError(
-            f"Mesher reported success but no mesh was found at {mesh_path}"
+            f"Mesher reported success but no mesh was found at {generated_path}"
         )
+
+    batch_meshes_dir = MESHES_DIR / "Batch"
+    batch_meshes_dir.mkdir(parents=True, exist_ok=True)
+    mesh_path = batch_meshes_dir / f"{title}.unv"
+    generated_path.replace(mesh_path)
     return mesh_path
 
 
@@ -108,7 +114,7 @@ class CFDWorker:
     """
     Wraps a single long-lived `julia cfd_worker.jl` process so XCALibre's
     JIT/precompile cost is paid once for the whole sweep instead of once
-    per mesh. See 05_CFD_Scripts/Batch/cfd_worker.jl for the line protocol.
+    per mesh. See 07_CFD_Scripts/Batch/cfd_worker.jl for the line protocol.
     """
 
     def __init__(self, julia_exe="julia"):
@@ -144,9 +150,9 @@ class CFDWorker:
             if line.strip() == "##READY##":
                 return
 
-    def solve(self, mesh_path):
+    def solve(self, mesh_path, toml_path):
         self._check_alive(f"before solving {mesh_path}")
-        self.proc.stdin.write(f"{mesh_path}\n")
+        self.proc.stdin.write(f"{mesh_path}|{toml_path}\n")
         self.proc.stdin.flush()
 
         while True:
