@@ -11,7 +11,7 @@ Y_PLUS = 1.0            # target y+ for the first layer of the boundary layer me
 ## Geometry (All in metres and degrees)
 [foils]
 ELEMENT = ['El_1']
-AIRFOIL_FILE = ["NACA0012_Selig.dat"]
+AIRFOIL_FILE = ["NACA4415_Selig.dat"]
 CHORD = [0.4]            
 POSITION = [[0.0, 0.0]]         
 AOA = [7.0]              

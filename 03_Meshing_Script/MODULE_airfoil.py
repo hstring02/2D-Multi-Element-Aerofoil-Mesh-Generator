@@ -44,8 +44,8 @@ def read_transform_airfoil(filename, chord, position, aoa_deg, te_thickness=0.0)
 
     for x_scaled, y_scaled in scaled_points:
         # Rotate around origin (0,0)
-        x_rot = x_scaled * cos_a - y_scaled * sin_a
-        y_rot = x_scaled * sin_a + y_scaled * cos_a
+        x_rot = x_scaled * cos_a + y_scaled * sin_a
+        y_rot = -x_scaled * sin_a + y_scaled * cos_a
 
         # Translate
         x_trans = x_rot + dx
