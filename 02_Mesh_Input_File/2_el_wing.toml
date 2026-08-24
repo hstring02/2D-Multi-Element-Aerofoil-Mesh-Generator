@@ -13,7 +13,7 @@ Y_PLUS = 1.0            # target y+ for the first layer of the boundary layer me
 ELEMENT = ['El_1', 'El_2']
 AIRFOIL_FILE = ["AH_79-100_B_Inverted_Selig.dat", "AH_79-100_B_Inverted_Selig.dat"]
 CHORD = [0.4, 0.2]            
-POSITION = [[0.0, 0.0],[0.35, 0.012]]         
+POSITION = [[0.0, 0.0],[-0.046918, 0.009201]]   # El_1 is absolute (world coords); each element after is an offset from the previous element's trailing edge
 AOA = [0.0, -30.0]              
 TE_THICKNESS = [0.0004, 0.0002]   
 

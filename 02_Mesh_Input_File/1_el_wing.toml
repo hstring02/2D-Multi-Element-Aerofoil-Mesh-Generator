@@ -5,16 +5,16 @@ title = "1_el_wing"
 DENSITY = 1.225         # kg/m^3
 VELOCITY = 13.5         # m/s
 VISCOSITY = 1.81e-5     # Pa.s
-REYNOLDS_LENGTH = 0.4   # m (based on the chord of the largest element in the mesh)
+REYNOLDS_LENGTH = 1.4   # m (based on the chord of the largest element in the mesh)
 Y_PLUS = 1.0            # target y+ for the first layer of the boundary layer mesh
 
 ## Geometry (All in metres and degrees)
 [foils]
 ELEMENT = ['El_1']
 AIRFOIL_FILE = ["NACA4415_Selig.dat"]
-CHORD = [0.4]            
-POSITION = [[0.0, 0.0]]         
-AOA = [5.0]              
+CHORD = [1.4]            
+POSITION = [[0.0, 0.0]]   # El_1 is absolute (world coords); each element after is an offset from the previous element's trailing edge
+AOA = [12.0]              
 TE_THICKNESS = [0.0004]   
 
 [farfield]   
@@ -37,8 +37,8 @@ TE_FAN_ELEMENTS = 8             # inflation layer elements fanned around each bl
 
 [boundary_layer]
 ENABLED = true
-GROWTH_RATE = 1.2               # layer-to-layer growth ratio
-THICKNESS = 0.02               # total inflation layer thickness, metres
+GROWTH_RATE = 1.15               # layer-to-layer growth ratio
+THICKNESS = 0.01               # total inflation layer thickness, metres
 
 [wake_refinement]  
 ENABLED = true                  # A refinement box is generated per aerofoil element

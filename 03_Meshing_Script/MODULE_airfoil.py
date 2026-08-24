@@ -255,12 +255,19 @@ def airfoils(data, occ, foils_dir="."):
     airfoil_surfaces = []
     element_info = []
     CELLS_PER_CHORD = data["global_refinement"]["CELLS_PER_CHORD"]
+    prev_te_point = (0.0, 0.0)
     for index, elements in enumerate(data["foils"]["ELEMENT"]):
 
         AIRFOIL_FILE = Path(foils_dir) / data["foils"]["AIRFOIL_FILE"][index]
         CHORD = data["foils"]["CHORD"][index]
-        POSITION = data["foils"]["POSITION"][index]
         AOA = data["foils"]["AOA"][index]
+        # POSITION is an offset from the previous element's trailing edge
+        # (the first element has no predecessor, so its POSITION is the
+        # absolute world coordinate of its own leading edge). This way,
+        # moving an upstream element automatically carries every element
+        # downstream of it along with it.
+        OFFSET = data["foils"]["POSITION"][index]
+        POSITION = (prev_te_point[0] + OFFSET[0], prev_te_point[1] + OFFSET[1])
         # Surface point spacing scales with each element's own chord, so
         # a small flap gets proportionally finer points than a large main
         # element rather than sharing one absolute size across both.
@@ -284,6 +291,7 @@ def airfoils(data, occ, foils_dir="."):
             (foil[0][0] + foil[-1][0]) / 2.0,
             (foil[0][1] + foil[-1][1]) / 2.0,
         )
+        prev_te_point = te_point
 
         # Y-extent of the transformed airfoil (its footprint projected onto
         # the y-axis). At high AOA this span approaches the chord length

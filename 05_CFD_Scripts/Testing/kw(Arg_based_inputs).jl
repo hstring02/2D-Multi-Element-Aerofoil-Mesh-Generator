@@ -4,7 +4,7 @@ using TOML
 
 grids_dir = joinpath(@__DIR__, "..", "..", "04_Meshes")
 toml_dir  = joinpath(@__DIR__, "..", "..", "02_Mesh_Input_File")
-grid = "1_el_wing.unv"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different UNV file as the first argument to this script.
+grid = "3_el_wing.unv"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different UNV file as the first argument to this script.
 
 if length(ARGS) >= 1
     arg_path = ARGS[1]
@@ -130,7 +130,7 @@ solvers = (
     )
 )
 
-runtime = Runtime(iterations=1000, write_interval=100, time_step=1)
+runtime = Runtime(iterations=500, write_interval=100, time_step=1)
 # runtime = Runtime(iterations=2, write_interval=-1, time_step=1)
 
 config = Configuration(
@@ -159,8 +159,6 @@ q = 0.5*rho*u_mag^2*chord
 Cl = lift/q
 Cd = drag/q
 
-println("Pressure force: ", Fp[1:2], " N/m")
-println("Viscous force: ", Fv[1:2], " N/m")
 println("Lift: ", lift, " N/m   Drag: ", drag, " N/m")
 println("Cl: ", round(Cl, sigdigits=4), "   Cd: ", round(Cd, sigdigits=4))
 
