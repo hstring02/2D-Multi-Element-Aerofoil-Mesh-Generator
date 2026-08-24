@@ -84,6 +84,61 @@ def compute_first_layer_height(density, velocity, viscosity, ref_length, y_plus)
 
 
 # ============================================================
+# ELEMENT-TO-ELEMENT CLEARANCE
+# ============================================================
+
+def _point_segment_distance(p, a, b):
+    ax, ay = a
+    bx, by = b
+    px, py = p
+    dx, dy = bx - ax, by - ay
+    length_sq = dx * dx + dy * dy
+    if length_sq == 0.0:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length_sq))
+    cx, cy = ax + t * dx, ay + t * dy
+    return math.hypot(px - cx, py - cy)
+
+
+def _min_distance_to_boundary(points, boundary):
+    n = len(boundary)
+    return min(
+        _point_segment_distance(p, boundary[i], boundary[(i + 1) % n])
+        for p in points
+        for i in range(n)
+    )
+
+
+def min_element_clearance(element_points_list):
+    """
+    Smallest surface-to-surface gap between any two elements' (already
+    scaled/rotated/translated) airfoil point clouds.
+
+    Checked in both directions per pair — each element's own vertices
+    against the other's edges — since the true closest approach can fall
+    on either element's edges depending on which one samples more densely
+    near the gap; checking only one direction can overstate the real
+    clearance.
+
+    Returns math.inf if there are fewer than two elements.
+    """
+    n_elements = len(element_points_list)
+    if n_elements < 2:
+        return math.inf
+
+    overall_min = math.inf
+    for i in range(n_elements):
+        for j in range(i + 1, n_elements):
+            a, b = element_points_list[i], element_points_list[j]
+            overall_min = min(
+                overall_min,
+                _min_distance_to_boundary(a, b),
+                _min_distance_to_boundary(b, a),
+            )
+    return overall_min
+
+
+# ============================================================
 # CLASSIFY AIRFOIL CURVES BY ELEMENT
 # ============================================================
 

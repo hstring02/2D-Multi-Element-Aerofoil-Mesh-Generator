@@ -1,0 +1,4 @@
+base_case = "02_Mesh_Input_File/2_el_wing.toml"
+
+sweep_key = "foils.AOA.0"
+sweep_values = [-4.0, -2.0, 0.0, 2.0, 4.0, 6.0, 8.0, 10.0]

@@ -28,15 +28,34 @@ Example [XCALibre.jl](https://github.com/mberto79/XCALibre.jl) run scripts for m
 
 See the [XCALibre.jl repository](https://github.com/mberto79/XCALibre.jl) for full solver documentation.
 
+### Batch Manager (`00_Batch_Manager`)
+
+Sweeps any single field of a case TOML (AOA, velocity, chord, ...) across a
+list of values and runs the full mesh → solve pipeline for each point:
+
+- **Config-driven sweeps** — point it at a base case TOML plus a dotted field
+  path and list of values (e.g. `foils.AOA.0` over `[-4, -2, 0, 2, 4]`); it
+  derives one case file per value automatically.
+- **Persistent CFD worker** — meshing runs per point as usual, but all CFD
+  solves for the sweep are handed to a single long-lived Julia process, so
+  XCALibre's JIT/precompile cost is paid once instead of once per point.
+- **Resilient to per-point failure** — a mesh or solve failure for one value
+  is logged and the sweep continues; only a hard crash of the Julia worker
+  itself stops remaining points.
+- **CSV + plot output** — every point's inputs and `Cl`/`Cd`/lift/drag are
+  written to a CSV, plus a two-panel PNG plot of `Cl` and `Cd` against the
+  swept value.
+
 ## File / Folder Structure and Workflow
 
 | Folder | Contents |
 |---|---|
+| [`00_Batch_Manager`](00_Batch_Manager) | `RUN_SCRIPT.py` sweeps a case TOML field over a list of values, meshing and solving each point and collecting the results into a CSV + plot. |
 | [`01_Foils`](01_Foils) | Raw aerofoil coordinates (Selig format, one `.dat` per aerofoil) used to build each element. |
 | [`02_Mesh_Input_File`](02_Mesh_Input_File) | Per-case TOML files: element geometry (chord, position, AOA, TE thickness), farfield extents, and all mesh refinement settings. |
 | [`03_Meshing_Script`](03_Meshing_Script) | `RUN_SCRIPT.py` is used to make the mesh plus various modules containing meshing functions. |
 | [`04_Meshes`](04_Meshes) | Output `.unv` mesh files, named after each TOML file's `title`. |
-| [`05_CFD_Scripts`](05_CFD_Scripts) | Example Julia scripts that load a mesh from `04_Meshes` and run a case in XCALibre.jl. |
+| [`05_CFD_Scripts`](05_CFD_Scripts) | Example Julia scripts that load a mesh from `04_Meshes` and run a case in XCALibre.jl, plus the batch manager's persistent solve worker (`05_CFD_Scripts/Batch`). |
 
 ### Workflow
 
@@ -48,14 +67,23 @@ See the [XCALibre.jl repository](https://github.com/mberto79/XCALibre.jl) for fu
    ```
    (run from inside `03_Meshing_Script`; omitting the argument defaults to `2_el_wing.toml`). The mesh is written to `04_Meshes/<title>.unv` and the Gmsh GUI opens automatically so you can inspect it.
 4. Point a Julia script in `05_CFD_Scripts` at your new `.unv` file and run it to solve the flow with XCALibre.jl.
+5. To sweep a parameter across many points instead of running one case by
+   hand, edit `00_Batch_Manager/batch_config.toml` (base case, field to
+   sweep, values) and run:
+   ```
+   python RUN_SCRIPT.py batch_config.toml
+   ```
+   (run from inside `00_Batch_Manager`; omitting the argument defaults to
+   `batch_config.toml`). Results land in `00_Batch_Manager/Results/<batch name>/`.
 
 ## Pre-requisites
 
 - **[Python](https://www.python.org/)** 3.9+, with:
   - [`gmsh`](https://pypi.org/project/gmsh/)
   - [`toml`](https://pypi.org/project/toml/)
+  - [`matplotlib`](https://pypi.org/project/matplotlib/) (batch manager result plots only)
   ```
-  pip install gmsh toml
+  pip install gmsh toml matplotlib
   ```
 - **[Gmsh](https://gmsh.info/)** — installed automatically via the `gmsh` Python package above (no separate install needed).
 - **[Julia](https://julialang.org/)** 1.10+, with:

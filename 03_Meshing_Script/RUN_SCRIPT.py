@@ -17,14 +17,16 @@ from MODULE_mesh import (
     set_background_field, add_boundary_layer_field, set_boundary_layer_field,
     get_straight_line_curves, enforce_cells_on_curves, get_curve_endpoints,
     add_box_field, add_min_field, compute_growth_dist_max,
-    compute_first_layer_height, classify_curves_by_points
+    compute_first_layer_height, classify_curves_by_points,
+    min_element_clearance
 )
+from MODULE_log import info, success, warn, subtitle
 
 # ============================================================
 # LOAD DATA
 # ============================================================
 
-INPUT_FILE = "3_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
+INPUT_FILE = "2_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 MESH_INPUT_DIR = SCRIPT_DIR / "02_Mesh_Input_File"
@@ -76,8 +78,8 @@ if BL_ENABLED:
         ref_length=FLOW_CONFIG["REYNOLDS_LENGTH"],
         y_plus=FLOW_CONFIG["Y_PLUS"],
     )
-    print(
-        f"[boundary_layer] target y+={FLOW_CONFIG['Y_PLUS']} -> "
+    success(
+        f"[boundary_layer] target y+={FLOW_CONFIG['Y_PLUS']:.6g} -> "
         f"computed FIRST_LAYER_HEIGHT={BL_FIRST_LAYER_HEIGHT:.6g} m"
     )
 else:
@@ -103,6 +105,36 @@ gmsh.model.add("FSAE_Airfoil")
 occ = gmsh.model.occ
 
 airfoil_surfaces, element_info = airfoils(data, occ, FOILS_DIR)    # Reads airfoil data points, builds curves and returns surfaces + per-element chord/TE info
+
+# A single boundary_layer THICKNESS grows outward from every element's own
+# surface with no awareness of how close another element sits — on tight
+# multi-element geometry (e.g. a flap tucked under a main element), two
+# elements' layers can grow into and cross each other, which gmsh reports
+# as a self-intersecting 1D mesh ("Edge not recovered") rather than a
+# clean taper. Capping THICKNESS so each element's layer can't reach past
+# the midpoint of the tightest element-to-element gap rules that out
+# regardless of how close together they are.
+if BL_ENABLED and len(element_info) > 1:
+    MIN_ELEMENT_CLEARANCE = min_element_clearance([info["points"] for info in element_info])
+    BL_CLEARANCE_SAFETY_MARGIN = 0.95   # headroom below the exact geometric limit, for surface discretisation
+    MAX_SAFE_BL_THICKNESS = BL_CLEARANCE_SAFETY_MARGIN * MIN_ELEMENT_CLEARANCE / 2.0
+
+    if BL_THICKNESS > MAX_SAFE_BL_THICKNESS:
+        if MAX_SAFE_BL_THICKNESS < BL_FIRST_LAYER_HEIGHT:
+            raise ValueError(
+                f"Elements are only {MIN_ELEMENT_CLEARANCE:.6g} m apart at their "
+                f"closest approach — too tight to fit even one boundary_layer "
+                f"cell (FIRST_LAYER_HEIGHT={BL_FIRST_LAYER_HEIGHT:.6g} m). "
+                "Move the elements further apart, reduce Y_PLUS, or disable "
+                "boundary_layer for this case."
+            )
+        warn(
+            f"[boundary_layer] THICKNESS {BL_THICKNESS:.6g} m would overlap a "
+            f"neighbouring element (closest approach {MIN_ELEMENT_CLEARANCE:.6g} m) "
+            f"-> clamped to {MAX_SAFE_BL_THICKNESS:.6g} m"
+        )
+        BL_THICKNESS = MAX_SAFE_BL_THICKNESS
+        DIST_MIN = BL_THICKNESS
 
 # ============================================================
 # BUILD FARFIELD
@@ -168,10 +200,6 @@ for curve_tag in all_fluid_curves:
     else:
         airfoil_boundary_curves.append(curve_tag)
 
-print(f"Fluid Surface Tag:       {fluid_surface_tag}")
-print(f"Farfield Curves:         {farfield_boundary_curves}")
-print(f"Airfoil Boundary Curves: {airfoil_boundary_curves}")
-
 if not airfoil_boundary_curves:
     raise RuntimeError(
         "No airfoil boundary curves recovered after boolean cut. "
@@ -236,9 +264,6 @@ element_curves = [[] for _ in element_info]
 for curve_tag, elem_idx in zip(airfoil_boundary_curves, element_indices):
     element_curves[elem_idx].append(curve_tag)
 
-for info, curves in zip(element_info, element_curves):
-    print(f"  {info['element']}: boundary curves {curves}")
-
 # ============================================================
 # TRAILING-EDGE CELL COUNT
 # ============================================================
@@ -278,11 +303,11 @@ def new_field_id():
 # actually is.
 combined_field_ids = []
 
-for info, curves in zip(element_info, element_curves):
-    point_size = info["point_size"]
+for elem_info, curves in zip(element_info, element_curves):
+    point_size = elem_info["point_size"]
     dist_max = compute_growth_dist_max(point_size, MESH_MAX, GLOBAL_GROWTH_RATE, DIST_MIN)
-    print(
-        f"[{info['element']}] POINT_SIZE={point_size} GROWTH_RATE={GLOBAL_GROWTH_RATE} -> "
+    success(
+        f"[{elem_info['element']}] POINT_SIZE={point_size:.6g} GROWTH_RATE={GLOBAL_GROWTH_RATE:.6g} -> "
         f"computed DIST_MAX={dist_max:.6g} m"
     )
 
@@ -330,16 +355,16 @@ if WAKE_ENABLED:
     # shared GROWTH_RATE, to reach MESH_MAX. One shared value, since
     # WAKE_MESH_SIZE/MESH_MAX/GROWTH_RATE are all global (not per-element).
     wake_transition = compute_growth_dist_max(WAKE_MESH_SIZE, MESH_MAX, GLOBAL_GROWTH_RATE)
-    print(
-        f"[wake_refinement] MESH_SIZE={WAKE_MESH_SIZE} GROWTH_RATE={GLOBAL_GROWTH_RATE} -> "
+    success(
+        f"[wake_refinement] MESH_SIZE={WAKE_MESH_SIZE:.6g} GROWTH_RATE={GLOBAL_GROWTH_RATE:.6g} -> "
         f"computed transition={wake_transition:.6g} m"
     )
 
-    for info in element_info:
-        chord = info["chord"]
-        te_x, _ = info["te_point"]
+    for elem_info in element_info:
+        chord = elem_info["chord"]
+        te_x, _ = elem_info["te_point"]
 
-        aoa_frac = min(abs(info["aoa"]), 90.0) / 90.0
+        aoa_frac = min(abs(elem_info["aoa"]), 90.0) / 90.0
         x_length_chords = WAKE_X_LENGTH_CHORDS_AOA_0 + aoa_frac * (
             WAKE_X_LENGTH_CHORDS_AOA_90 - WAKE_X_LENGTH_CHORDS_AOA_0
         )
@@ -355,8 +380,8 @@ if WAKE_ENABLED:
             size_out=MESH_MAX,
             x_min=x_min,
             x_max=x_max,
-            y_min=info["y_min"] - y_pad,
-            y_max=info["y_max"] + y_pad,
+            y_min=elem_info["y_min"] - y_pad,
+            y_max=elem_info["y_max"] + y_pad,
             transition=wake_transition
         )
         combined_field_ids.append(field_id)
@@ -426,7 +451,7 @@ if BL_ENABLED:
 # MESH STABILISATION OPTIONS
 # ============================================================
 
-gmsh.option.setNumber("Mesh.Algorithm", 6)           # Frontal-Delaunay
+gmsh.option.setNumber("Mesh.Algorithm", 5)           # Delaunay (Frontal-Delaunay/6 is more prone to intermittent "Edge not recovered" failures on tight multi-element geometry)
 gmsh.option.setNumber("Mesh.Optimize", 1)
 gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)
 gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 1)
@@ -459,12 +484,18 @@ if not output_filename.lower().endswith(".unv"):
     output_filename += ".unv"
 output_unv_xcalibre(output_filename)
 
-print(f"\nMesh successfully generated and saved to: {SCRIPT_DIR / '04_Meshes' / output_filename}")
-print("\nBoundary summary:")
-print(f"  airfoil  : curves {airfoil_boundary_curves}")
-print(f"  inlet    : curve  {inlet_curve}")
-print(f"  outlet   : curve  {outlet_curve}")
-print(f"  farfield : curves {[top_curve, bottom_curve]}")
+node_count = len(gmsh.model.mesh.getNodes()[0])
+element_count = sum(len(tags) for tags in gmsh.model.mesh.getElements()[1])
+
+success(f"Mesh generated and saved to: {SCRIPT_DIR / '04_Meshes' / output_filename}")
+
+subtitle("Summary")
+info(f"  nodes    : {node_count}")
+info(f"  elements : {element_count}")
+info(f"  airfoil  : curves {airfoil_boundary_curves}")
+info(f"  inlet    : curve  {inlet_curve}")
+info(f"  outlet   : curve  {outlet_curve}")
+info(f"  farfield : curves {[top_curve, bottom_curve]}")
 
 # ============================================================
 # VISUALISATION

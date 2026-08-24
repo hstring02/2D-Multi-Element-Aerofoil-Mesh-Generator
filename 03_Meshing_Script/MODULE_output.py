@@ -140,9 +140,6 @@ def output_unv_xcalibre(output_filename):
 
 
     # POST-PROCESS UNV FILE
-
-    print("Post-processing UNV file...")
-
     with open(path, "r") as f:
         unv_content = f.read()
 
@@ -160,8 +157,3 @@ def output_unv_xcalibre(output_filename):
 
     with open(path, "w") as f:
         f.write(fixed_content)
-
-    print("  - Replaced Fortran 'D' exponents with 'E'")
-    print("  - Renamed UNV dataset 2477 → 2467 for XCALibre compatibility")
-    print("  - Renumbered nodes/elements to contiguous labels for XCALibre compatibility")
-    print("  - Added UNV units (164) and coordinate system (2420) datasets")
