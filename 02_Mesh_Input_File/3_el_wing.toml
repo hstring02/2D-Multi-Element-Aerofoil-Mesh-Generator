@@ -5,7 +5,7 @@ title = "3_el_wing"
 DENSITY = 1.225         # kg/m^3
 VELOCITY = 13.5         # m/s
 VISCOSITY = 1.81e-5     # Pa.s
-REYNOLDS_LENGTH = 0.01   # m (based on the chord of the largest element in the mesh)
+REYNOLDS_LENGTH = 0.01   # m (For first cell height)
 Y_PLUS = 1.0            # target y+ for the first layer of the boundary layer mesh
 
 ## Geometry (All in metres and degrees)

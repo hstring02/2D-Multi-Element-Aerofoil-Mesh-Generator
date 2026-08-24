@@ -24,7 +24,9 @@ if !isfile(toml_file)
     error("Flow config file not found: $toml_file")
 end
 
-flow_config = TOML.parsefile(toml_file)["flow"]
+toml_config = TOML.parsefile(toml_file)
+flow_config = toml_config["flow"]
+total_chord = sum(toml_config["foils"]["CHORD"]) # sum of all element chords, m (reference length for Cl/Cd normalisation)
 
 mesh = UNV2D_mesh(mesh_file, scale=1)
 
@@ -35,14 +37,13 @@ mesh_dev = adapt(backend, mesh)
 rho = flow_config["DENSITY"]           # kg/m3
 nu = flow_config["VISCOSITY"]          # kinematic viscosity, m^2/s
 u_mag = flow_config["VELOCITY"]        # m/s
-chord = flow_config["REYNOLDS_LENGTH"] # reference length, m (matches lift/drag reference chord below)
 velocity = [u_mag, 0.0, 0.0]
 Tu = 0.05
 nuR = 100
 k_inlet = 3/2*(Tu*u_mag)^2
 ω_inlet = k_inlet/(nuR*nu)
 νt_inlet = k_inlet/ω_inlet
-Re = velocity[1]*chord/nu
+Re = velocity[1]*total_chord/nu
 
 model = Physics(
     time = Steady(),
@@ -154,12 +155,12 @@ Ft = Fp + Fv # total force per unit span, N/m (inflow is horizontal, so no rotat
 
 drag = Ft[1]
 lift = Ft[2]
-q = 0.5*rho*u_mag^2*chord
+q = 0.5*rho*u_mag^2*total_chord
 
 Cl = lift/q
 Cd = drag/q
 
-println("Lift: ", lift, " N/m   Drag: ", drag, " N/m")
+println("Lift: ", round(lift, sigdigits=4), " N/m   Drag: ", round(drag, sigdigits=4), " N/m")
 println("Cl: ", round(Cl, sigdigits=4), "   Cd: ", round(Cd, sigdigits=4))
 
 println("L/D ratio: ", round(Cl/Cd, sigdigits=4))
