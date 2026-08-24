@@ -17,20 +17,30 @@ from MODULE_mesh import (
     set_background_field, add_boundary_layer_field, set_boundary_layer_field,
     get_straight_line_curves, enforce_cells_on_curves, get_curve_endpoints,
     add_box_field, add_min_field, compute_growth_dist_max,
-    classify_curves_by_points
+    compute_first_layer_height, classify_curves_by_points
 )
 
 # ============================================================
 # LOAD DATA
 # ============================================================
 
-INPUT_FILE = "3_el_wing.toml"
+INPUT_FILE = "1_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
-CONFIG_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else SCRIPT_DIR / "02_Mesh_Input_File" / INPUT_FILE
-FOILS_DIR = SCRIPT_DIR / "01_Foils"
+MESH_INPUT_DIR = SCRIPT_DIR / "02_Mesh_Input_File"
+
+if len(sys.argv) > 1:
+    arg_path = Path(sys.argv[1])
+    CONFIG_PATH = arg_path if arg_path.parent != Path(".") else MESH_INPUT_DIR / arg_path
+else:
+    CONFIG_PATH = MESH_INPUT_DIR / INPUT_FILE
+
+if not CONFIG_PATH.is_file():
+    raise FileNotFoundError(f"Mesh input file not found: {CONFIG_PATH}")
 
 data = toml.load(CONFIG_PATH)
+
+FOILS_DIR = SCRIPT_DIR / "01_Foils"
 
 XMIN = data["farfield"]["XMIN"]
 XMAX = data["farfield"]["XMAX"]
@@ -43,11 +53,35 @@ MAX_CURVATURE_ANGLE = data["global_refinement"].get("MAX_CURVATURE_ANGLE", 360.0
 TE_FAN_ELEMENTS = data["global_refinement"].get("TE_FAN_ELEMENTS", 5)
 BL_CONFIG = data.get("boundary_layer", {})
 BL_ENABLED = BL_CONFIG.get("ENABLED", False)
-BL_FIRST_LAYER_HEIGHT = BL_CONFIG.get("FIRST_LAYER_HEIGHT")
 BL_GROWTH_RATE = BL_CONFIG.get("GROWTH_RATE")
 BL_THICKNESS = BL_CONFIG.get("THICKNESS")
 
 DIST_MIN = BL_THICKNESS if BL_ENABLED else 0.0
+
+if BL_ENABLED:
+    FLOW_CONFIG = data.get("flow", {})
+    missing_flow_keys = [
+        key for key in ("DENSITY", "VELOCITY", "VISCOSITY", "REYNOLDS_LENGTH", "Y_PLUS")
+        if key not in FLOW_CONFIG
+    ]
+    if missing_flow_keys:
+        raise ValueError(
+            f"boundary_layer is ENABLED but [flow] is missing: {', '.join(missing_flow_keys)}"
+        )
+
+    BL_FIRST_LAYER_HEIGHT = compute_first_layer_height(
+        density=FLOW_CONFIG["DENSITY"],
+        velocity=FLOW_CONFIG["VELOCITY"],
+        viscosity=FLOW_CONFIG["VISCOSITY"],
+        ref_length=FLOW_CONFIG["REYNOLDS_LENGTH"],
+        y_plus=FLOW_CONFIG["Y_PLUS"],
+    )
+    print(
+        f"[boundary_layer] target y+={FLOW_CONFIG['Y_PLUS']} -> "
+        f"computed FIRST_LAYER_HEIGHT={BL_FIRST_LAYER_HEIGHT:.6g} m"
+    )
+else:
+    BL_FIRST_LAYER_HEIGHT = None
 
 WAKE_CONFIG = data.get("wake_refinement", {})
 WAKE_ENABLED = WAKE_CONFIG.get("ENABLED", False)
@@ -436,5 +470,6 @@ print(f"  farfield : curves {[top_curve, bottom_curve]}")
 # VISUALISATION
 # ============================================================
 
-gmsh.fltk.run()
-gmsh.finalize()
+if data.get("visualisation", {}).get("ENABLED", False):
+    gmsh.fltk.run()
+    gmsh.finalize()

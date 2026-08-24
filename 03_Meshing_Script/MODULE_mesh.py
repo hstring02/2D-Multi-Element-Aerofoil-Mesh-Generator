@@ -43,6 +43,47 @@ def compute_growth_dist_max(mesh_min, mesh_max, growth_rate, dist_min=0.0):
 
 
 # ============================================================
+# FLOW CONDITIONS -> FIRST LAYER HEIGHT
+# ============================================================
+
+def compute_first_layer_height(density, velocity, viscosity, ref_length, y_plus):
+    """
+    Computes the wall-normal height of the boundary layer's first cell
+    needed to hit a target y+ at the given freestream flow conditions.
+
+    Wall shear stress is estimated from the Schlichting flat-plate
+    turbulent skin-friction correlation (valid for Re < 10^9):
+
+        Cf = (2 * log10(Re_L) - 0.65)^-2.3
+
+    which gives the friction velocity u_tau = sqrt(tau_wall / rho) and,
+    from the definition of y+, the required first-layer height:
+
+        y = y_plus * viscosity / (density * u_tau)
+
+    Parameters
+    ----------
+    density    : float – freestream fluid density, kg/m^3
+    velocity   : float – freestream velocity, m/s
+    viscosity  : float – dynamic viscosity, Pa.s
+    ref_length : float – reference length for the Reynolds number
+                 (e.g. the chord of the largest element), m
+    y_plus     : float – target non-dimensional wall distance
+    """
+    reynolds = density * velocity * ref_length / viscosity
+    if reynolds <= 1.0:
+        raise ValueError(
+            f"Reynolds number must be > 1 to estimate skin friction (got {reynolds:.6g})"
+        )
+
+    skin_friction = (2.0 * math.log10(reynolds) - 0.65) ** -2.3
+    wall_shear_stress = 0.5 * skin_friction * density * velocity ** 2
+    friction_velocity = math.sqrt(wall_shear_stress / density)
+
+    return y_plus * viscosity / (density * friction_velocity)
+
+
+# ============================================================
 # CLASSIFY AIRFOIL CURVES BY ELEMENT
 # ============================================================
 

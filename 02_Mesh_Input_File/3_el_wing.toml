@@ -1,5 +1,13 @@
 title = "3_el_wing"
 
+## Flow Data (Used to calculate first layer height and for post-processing)
+[flow]
+DENSITY = 1.225         # kg/m^3
+VELOCITY = 13.5         # m/s
+VISCOSITY = 1.81e-5     # Pa.s
+REYNOLDS_LENGTH = 0.4   # m (based on the chord of the largest element in the mesh)
+Y_PLUS = 1.0            # target y+ for the first layer of the boundary layer mesh
+
 ## Geometry (All in metres and degrees)
 [foils]
 ELEMENT = ['El_1', 'El_2','EL_3']
@@ -15,21 +23,22 @@ XMAX = 10.0
 YMIN = -5.0     
 YMAX = 5.0      
 
-
 ## Mesh Parameters
+[visualisation]
+ENABLED = true
+
 [global_refinement]
 MESH_MAX = 5.0                  # far field
-CELLS_PER_CHORD = 40            # each element's surface point spacing = its own CHORD / this, so all elements get proportionally equal resolution regardless of size
+CELLS_PER_CHORD = 75            # each element's surface point spacing = its own CHORD / this, so all elements get proportionally equal resolution regardless of size
 GROWTH_RATE = 1.3               # geometric ring-to-ring growth rate away from each airfoil
 TE_CELLS = 5                    # number of mesh cells enforced across each blunt TE base
-MAX_CURVATURE_ANGLE = 10.0      # degrees; max angle a curve (e.g. leading edge) subtends per mesh element
+MAX_CURVATURE_ANGLE = 5.0      # degrees; max angle a curve (e.g. leading edge) subtends per mesh element
 TE_FAN_ELEMENTS = 8             # inflation layer elements fanned around each blunt TE corner (Gmsh default; tune if corner cells still look skewed)
 
 [boundary_layer]
 ENABLED = true
-FIRST_LAYER_HEIGHT = 0.00002    # wall-normal height of first cell, metres
 GROWTH_RATE = 1.2               # layer-to-layer growth ratio
-THICKNESS = 0.006               # total inflation layer thickness, metres
+THICKNESS = 0.02               # total inflation layer thickness, metres
 
 [wake_refinement]  
 ENABLED = true                  # A refinement box is generated per aerofoil element
