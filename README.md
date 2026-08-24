@@ -145,4 +145,4 @@ Contour made with **[ParaView](https://www.paraview.org/)**.
 - **Locally-resolved boundary-layer sizing** — replace the single global first-layer-height correlation with a per-point value driven by an actual local velocity estimate (e.g. a lightweight panel method), instead of one freestream-based number applied uniformly around every element.
 - **Multi-parameter batch sweeps** — extend the batch runner beyond a single dotted field to multi-dimensional (grid) sweeps in one run.
 - **Automated mesh-quality and convergence reporting** — surface mesh quality metrics and solver convergence/y+ checks directly from the pipeline instead of relying on manual inspection.
--**Gradient based optimisation** - Allow batch runs to efficiently find optimal solutions for multi-variable design spaces.
+- **Gradient based optimisation** - Allow batch runs to efficiently find optimal solutions for multi-variable design spaces.
