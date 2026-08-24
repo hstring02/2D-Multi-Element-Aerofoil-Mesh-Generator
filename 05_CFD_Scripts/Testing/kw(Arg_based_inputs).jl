@@ -26,7 +26,7 @@ end
 
 flow_config = TOML.parsefile(toml_file)["flow"]
 
-mesh = UNV2D_mesh(mesh_file, scale=0.001)
+mesh = UNV2D_mesh(mesh_file, scale=1)
 
 backend = CPU(); workgroup = 1024; activate_multithread(backend)
 hardware = Hardware(backend=backend, workgroup=workgroup)
@@ -39,8 +39,8 @@ chord = flow_config["REYNOLDS_LENGTH"] # reference length, m (matches lift/drag 
 velocity = [u_mag, 0.0, 0.0]
 Tu = 0.05
 nuR = 100
-k_inlet = 1 #3/2*(Tu*u_mag)^2
-ω_inlet = 1000 #k_inlet/(nuR*nu)
+k_inlet = 3/2*(Tu*u_mag)^2
+ω_inlet = k_inlet/(nuR*nu)
 νt_inlet = k_inlet/ω_inlet
 Re = velocity[1]*chord/nu
 
@@ -100,7 +100,7 @@ solvers = (
         solver      = Bicgstab(), # Bicgstab(), Gmres()
         preconditioner = Jacobi(),
         convergence = 1e-7,
-        relax       = 0.7,
+        relax       = 0.5,
         rtol = 1e-2,
         atol = 1e-10
     ),
@@ -108,7 +108,7 @@ solvers = (
         solver      = Cg(), #Gmres(), #Cg(), # Bicgstab(), Gmres()
         preconditioner = Jacobi(),
         convergence = 1e-7,
-        relax       = 0.3,
+        relax       = 0.2,
         rtol = 1e-3,
         atol = 1e-10
     ),
@@ -130,7 +130,7 @@ solvers = (
     )
 )
 
-runtime = Runtime(iterations=2000, write_interval=100, time_step=1)
+runtime = Runtime(iterations=1000, write_interval=100, time_step=1)
 # runtime = Runtime(iterations=2, write_interval=-1, time_step=1)
 
 config = Configuration(
@@ -163,3 +163,7 @@ println("Pressure force: ", Fp[1:2], " N/m")
 println("Viscous force: ", Fv[1:2], " N/m")
 println("Lift: ", lift, " N/m   Drag: ", drag, " N/m")
 println("Cl: ", round(Cl, sigdigits=4), "   Cd: ", round(Cd, sigdigits=4))
+
+println("L/D ratio: ", round(Cl/Cd, sigdigits=4))
+
+println("Reynolds number: ", round(Re, sigdigits=4))

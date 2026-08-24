@@ -2,6 +2,8 @@ import math
 
 import gmsh
 
+from MODULE_log import success, warn
+
 
 # ============================================================
 # GEOMETRIC GROWTH -> DIST_MAX
@@ -136,6 +138,49 @@ def min_element_clearance(element_points_list):
                 _min_distance_to_boundary(b, a),
             )
     return overall_min
+
+
+def clamp_boundary_layer_thickness(element_info, thickness, first_layer_height, safety_margin=0.95):
+    """
+    Caps `thickness` so no two elements' boundary layers can grow into
+    each other. A single global THICKNESS grows outward from every
+    element's own surface with no awareness of how close another element
+    sits — on tight multi-element geometry (e.g. a flap tucked under a
+    main element), two elements' layers can cross, which gmsh reports as
+    a self-intersecting 1D mesh ("Edge not recovered") rather than a
+    clean taper. Capping thickness so each element's layer can't reach
+    past the midpoint of the tightest element-to-element gap rules that
+    out regardless of how close together the elements are.
+
+    Prints a warning if it had to clamp. Raises ValueError if the
+    elements are too close together to fit even one boundary-layer cell.
+
+    Returns the (possibly unchanged) thickness to use.
+    """
+    if len(element_info) < 2:
+        return thickness
+
+    min_clearance = min_element_clearance([info["points"] for info in element_info])
+    max_safe_thickness = safety_margin * min_clearance / 2.0
+
+    if thickness <= max_safe_thickness:
+        return thickness
+
+    if max_safe_thickness < first_layer_height:
+        raise ValueError(
+            f"Elements are only {min_clearance:.6g} m apart at their closest "
+            f"approach — too tight to fit even one boundary_layer cell "
+            f"(FIRST_LAYER_HEIGHT={first_layer_height:.6g} m). Move the "
+            "elements further apart, reduce Y_PLUS, or disable boundary_layer "
+            "for this case."
+        )
+
+    warn(
+        f"[boundary_layer] THICKNESS {thickness:.6g} m would overlap a "
+        f"neighbouring element (closest approach {min_clearance:.6g} m) "
+        f"-> clamped to {max_safe_thickness:.6g} m"
+    )
+    return max_safe_thickness
 
 
 # ============================================================
@@ -321,6 +366,149 @@ def add_box_field(
     field.setNumber(field_id, "YMin", y_min)
     field.setNumber(field_id, "YMax", y_max)
     field.setNumber(field_id, "Thickness", transition)
+
+
+# ============================================================
+# NEAR-SURFACE FIELD (ONE PER ELEMENT)
+# ============================================================
+
+def add_near_surface_fields(element_info, element_curves, mesh_max, growth_rate, dist_min, next_field_id):
+    """
+    Builds one background sizing field per element, growing from that
+    element's own POINT_SIZE out to mesh_max at growth_rate — rather than
+    a single shared MESH_MIN floor, so a finely-pointed flap and a
+    coarsely-pointed main element each get a DIST_MAX consistent with
+    their own starting resolution.
+
+    Returns the list of Threshold field IDs (one per element), ready to
+    be combined into a single background field via add_min_field.
+    """
+    field_ids = []
+    for info, curves in zip(element_info, element_curves):
+        point_size = info["point_size"]
+        dist_max = compute_growth_dist_max(point_size, mesh_max, growth_rate, dist_min)
+        success(
+            f"[{info['element']}] POINT_SIZE={point_size:.6g} GROWTH_RATE={growth_rate:.6g} -> "
+            f"computed DIST_MAX={dist_max:.6g} m"
+        )
+
+        dist_field_id = next_field_id()
+        add_distance_field(field_id=dist_field_id, curves=curves)
+
+        size_field_id = next_field_id()
+        add_threshold_field(
+            field_id=size_field_id,
+            in_field=dist_field_id,
+            size_min=point_size,
+            size_max=mesh_max,
+            dist_min=dist_min,
+            dist_max=dist_max
+        )
+        field_ids.append(size_field_id)
+    return field_ids
+
+
+# ============================================================
+# WAKE REFINEMENT (BOX FIELD, ONE PER ELEMENT)
+# ============================================================
+
+def add_wake_refinement_fields(
+    element_info, wake_mesh_size, mesh_max, growth_rate,
+    x_start_chords, y_half_height_chords, next_field_id
+):
+    """
+    Builds one wake-refinement Box field per element, anchored on that
+    element's own TE point (world coordinates, so it already accounts for
+    AOA/position) and sized as a multiple of its own chord. The box stays
+    aligned with the global X axis, not the local chord line, since the
+    wake convects downstream with the freestream rather than along
+    whichever way an individual flap element happens to be pitched.
+
+    Box height spans the element's own Y-extent (its footprint projected
+    onto the y-axis) plus a chord-scaled pad on each side, so an element
+    pitched to a high AOA — whose shed wake spans a taller Y range —
+    automatically gets a taller box.
+
+    Box downstream length ramps from 1 chord at AOA=0 up to 3 chords at
+    AOA=90 (a more sharply pitched element sheds a larger, slower-
+    resolving wake that needs a longer fine region to capture); AOA
+    beyond 90 clamps at the 3-chord ceiling rather than continuing to grow.
+
+    Returns the list of Box field IDs, one per element.
+    """
+    AOA_0_LENGTH_CHORDS = 1.0
+    AOA_90_LENGTH_CHORDS = 3.0
+
+    wake_transition = compute_growth_dist_max(wake_mesh_size, mesh_max, growth_rate)
+    success(
+        f"[wake_refinement] MESH_SIZE={wake_mesh_size:.6g} GROWTH_RATE={growth_rate:.6g} -> "
+        f"computed transition={wake_transition:.6g} m"
+    )
+
+    field_ids = []
+    for info in element_info:
+        chord = info["chord"]
+        te_x, _ = info["te_point"]
+
+        aoa_frac = min(abs(info["aoa"]), 90.0) / 90.0
+        x_length_chords = AOA_0_LENGTH_CHORDS + aoa_frac * (AOA_90_LENGTH_CHORDS - AOA_0_LENGTH_CHORDS)
+
+        x_min = te_x + x_start_chords * chord
+        x_max = x_min + x_length_chords * chord
+        y_pad = y_half_height_chords * chord
+
+        field_id = next_field_id()
+        add_box_field(
+            field_id=field_id,
+            size_in=wake_mesh_size,
+            size_out=mesh_max,
+            x_min=x_min,
+            x_max=x_max,
+            y_min=info["y_min"] - y_pad,
+            y_max=info["y_max"] + y_pad,
+            transition=wake_transition
+        )
+        field_ids.append(field_id)
+    return field_ids
+
+
+# ============================================================
+# TRAILING-EDGE CORNER REFINEMENT
+# ============================================================
+
+def add_te_corner_refinement_field(te_fan_points, mesh_size, dist_max, mesh_max, next_field_id):
+    """
+    Builds a Distance+Threshold field pair that tapers cell size down to
+    mesh_size right at each blunt-TE corner (te_fan_points), relaxing
+    back out to the surrounding background size over dist_max — flow
+    accelerates sharply around these corners, so they need finer
+    resolution than the rest of the surface (each element's POINT_SIZE).
+
+    size_max is mesh_max, not any element's own POINT_SIZE, deliberately:
+    this field is combined with the others via Min, so its "far" value
+    only needs to stop competing with them past dist_max — it must never
+    floor the whole domain, including the farfield boundary, at a size
+    only meant to apply right at the airfoil surface.
+
+    Returns the Threshold field ID, or None if there are no fan points
+    (a sharp TE has no separate corner to single out).
+    """
+    if not te_fan_points:
+        return None
+
+    dist_field_id = next_field_id()
+    add_distance_field(field_id=dist_field_id, points=te_fan_points)
+
+    size_field_id = next_field_id()
+    add_threshold_field(
+        field_id=size_field_id,
+        in_field=dist_field_id,
+        size_min=mesh_size,
+        size_max=mesh_max,
+        dist_min=0.0,
+        dist_max=dist_max
+    )
+    return size_field_id
 
 
 # ============================================================

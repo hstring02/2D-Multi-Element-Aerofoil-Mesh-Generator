@@ -13,20 +13,20 @@ from MODULE_airfoil import read_transform_airfoil, build_airfoil, airfoils
 from MODULE_geometry import build_farfield, subtract_airfoil
 from MODULE_output import output_unv_xcalibre
 from MODULE_mesh import (
-    get_airfoil_curves, add_distance_field, add_threshold_field,
-    set_background_field, add_boundary_layer_field, set_boundary_layer_field,
-    get_straight_line_curves, enforce_cells_on_curves, get_curve_endpoints,
-    add_box_field, add_min_field, compute_growth_dist_max,
-    compute_first_layer_height, classify_curves_by_points,
-    min_element_clearance
+    get_airfoil_curves, set_background_field, add_boundary_layer_field,
+    set_boundary_layer_field, get_straight_line_curves, enforce_cells_on_curves,
+    get_curve_endpoints, add_min_field, compute_first_layer_height,
+    classify_curves_by_points, clamp_boundary_layer_thickness,
+    add_near_surface_fields, add_wake_refinement_fields,
+    add_te_corner_refinement_field
 )
-from MODULE_log import info, success, warn, subtitle
+from MODULE_log import info, success, subtitle
 
 # ============================================================
 # LOAD DATA
 # ============================================================
 
-INPUT_FILE = "2_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
+INPUT_FILE = "1_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 MESH_INPUT_DIR = SCRIPT_DIR / "02_Mesh_Input_File"
@@ -106,35 +106,9 @@ occ = gmsh.model.occ
 
 airfoil_surfaces, element_info = airfoils(data, occ, FOILS_DIR)    # Reads airfoil data points, builds curves and returns surfaces + per-element chord/TE info
 
-# A single boundary_layer THICKNESS grows outward from every element's own
-# surface with no awareness of how close another element sits — on tight
-# multi-element geometry (e.g. a flap tucked under a main element), two
-# elements' layers can grow into and cross each other, which gmsh reports
-# as a self-intersecting 1D mesh ("Edge not recovered") rather than a
-# clean taper. Capping THICKNESS so each element's layer can't reach past
-# the midpoint of the tightest element-to-element gap rules that out
-# regardless of how close together they are.
-if BL_ENABLED and len(element_info) > 1:
-    MIN_ELEMENT_CLEARANCE = min_element_clearance([info["points"] for info in element_info])
-    BL_CLEARANCE_SAFETY_MARGIN = 0.95   # headroom below the exact geometric limit, for surface discretisation
-    MAX_SAFE_BL_THICKNESS = BL_CLEARANCE_SAFETY_MARGIN * MIN_ELEMENT_CLEARANCE / 2.0
-
-    if BL_THICKNESS > MAX_SAFE_BL_THICKNESS:
-        if MAX_SAFE_BL_THICKNESS < BL_FIRST_LAYER_HEIGHT:
-            raise ValueError(
-                f"Elements are only {MIN_ELEMENT_CLEARANCE:.6g} m apart at their "
-                f"closest approach — too tight to fit even one boundary_layer "
-                f"cell (FIRST_LAYER_HEIGHT={BL_FIRST_LAYER_HEIGHT:.6g} m). "
-                "Move the elements further apart, reduce Y_PLUS, or disable "
-                "boundary_layer for this case."
-            )
-        warn(
-            f"[boundary_layer] THICKNESS {BL_THICKNESS:.6g} m would overlap a "
-            f"neighbouring element (closest approach {MIN_ELEMENT_CLEARANCE:.6g} m) "
-            f"-> clamped to {MAX_SAFE_BL_THICKNESS:.6g} m"
-        )
-        BL_THICKNESS = MAX_SAFE_BL_THICKNESS
-        DIST_MIN = BL_THICKNESS
+if BL_ENABLED:
+    BL_THICKNESS = clamp_boundary_layer_thickness(element_info, BL_THICKNESS, BL_FIRST_LAYER_HEIGHT)
+    DIST_MIN = BL_THICKNESS
 
 # ============================================================
 # BUILD FARFIELD
@@ -248,12 +222,6 @@ for name, val in [("inlet", inlet_curve), ("outlet", outlet_curve),
 # ============================================================
 # CLASSIFY AIRFOIL CURVES BY ELEMENT
 # ============================================================
-# The boolean cut above merges every element into one fluid surface and
-# renumbers every curve, so which element originally produced a given
-# curve isn't tracked directly any more. Recovered here by nearest-point
-# comparison against each element's own (already known) point cloud —
-# see classify_curves_by_points for why bounding boxes alone aren't
-# reliable enough for closely-packed multi-element geometry.
 
 element_indices = classify_curves_by_points(
     airfoil_boundary_curves,
@@ -270,15 +238,6 @@ for curve_tag, elem_idx in zip(airfoil_boundary_curves, element_indices):
 
 te_line_curves = get_straight_line_curves(airfoil_boundary_curves)
 enforce_cells_on_curves(te_line_curves, TE_CELLS)
-
-# Corner points where each blunt TE base line meets the upper/lower airfoil
-# surface. These are convex ~90 degree corners, so the boundary layer's
-# default miter join stretches a single quad column across them instead of
-# filling the corner — this is what produces the high aspect ratio cells at
-# the outer edge of the layer. Passing them as FanPointsList makes Gmsh fan
-# several triangular columns across the corner instead. Also used below to
-# anchor the TE-corner refinement field, since flow accelerates sharply
-# around the same corners.
 te_fan_points = get_curve_endpoints(te_line_curves)
 
 # ============================================================
@@ -292,132 +251,22 @@ def new_field_id():
     _next_field_id += 1
     return _next_field_id
 
-# NEAR-SURFACE FIELD (ONE PER ELEMENT)
-# ============================================================
-# Each element grows its own near-surface mesh size from its own
-# POINT_SIZE (rather than a single shared MESH_MIN floor) out to
-# MESH_MAX at the shared GROWTH_RATE. A finely-pointed flap and a
-# coarsely-pointed main element each get a DIST_MAX consistent with
-# their own starting resolution, instead of both being forced through
-# the same growth region regardless of how fine their own surface mesh
-# actually is.
-combined_field_ids = []
-
-for elem_info, curves in zip(element_info, element_curves):
-    point_size = elem_info["point_size"]
-    dist_max = compute_growth_dist_max(point_size, MESH_MAX, GLOBAL_GROWTH_RATE, DIST_MIN)
-    success(
-        f"[{elem_info['element']}] POINT_SIZE={point_size:.6g} GROWTH_RATE={GLOBAL_GROWTH_RATE:.6g} -> "
-        f"computed DIST_MAX={dist_max:.6g} m"
-    )
-
-    dist_field_id = new_field_id()
-    add_distance_field(field_id=dist_field_id, curves=curves)
-
-    size_field_id = new_field_id()
-    add_threshold_field(
-        field_id=size_field_id,
-        in_field=dist_field_id,
-        size_min=point_size,
-        size_max=MESH_MAX,
-        dist_min=DIST_MIN,
-        dist_max=dist_max
-    )
-    combined_field_ids.append(size_field_id)
-
-# ============================================================
-# WAKE REFINEMENT (BOX FIELD, ONE PER ELEMENT)
-# ============================================================
-# Each element gets its own wake box, anchored on that element's own TE
-# point in x (world coordinates, so it already accounts for AOA/position)
-# and sized as a multiple of that element's own chord. The box stays
-# aligned with the global X axis (not the local chord line) since the
-# wake convects downstream with the freestream, not along whichever way
-# an individual flap element happens to be pitched.
-#
-# Box height spans the element's own Y-extent (its footprint projected
-# onto the y-axis) plus a chord-scaled pad on each side, rather than a
-# fixed height about the TE point — so an element pitched to a high AOA,
-# whose shed wake spans a taller Y range, automatically gets a taller box.
-#
-# Box downstream length also scales with AOA: 1 chord at AOA = 0 degrees,
-# ramping linearly up to 3 chords at AOA = 90 degrees (a more sharply
-# pitched element sheds a larger, slower-resolving wake structure that
-# needs a longer fine region to capture). AOA beyond 90 degrees clamps at
-# the 3-chord ramp ceiling rather than continuing to grow.
-WAKE_X_LENGTH_CHORDS_AOA_0  = 1.0
-WAKE_X_LENGTH_CHORDS_AOA_90 = 3.0
+combined_field_ids = add_near_surface_fields(
+    element_info, element_curves, MESH_MAX, GLOBAL_GROWTH_RATE, DIST_MIN, new_field_id
+)
 
 if WAKE_ENABLED:
-    # Same growth-rate logic as each element's own near-surface field:
-    # the ramp-back distance outside the box is however far a geometric
-    # series starting at the box's own cell size needs to grow, at the
-    # shared GROWTH_RATE, to reach MESH_MAX. One shared value, since
-    # WAKE_MESH_SIZE/MESH_MAX/GROWTH_RATE are all global (not per-element).
-    wake_transition = compute_growth_dist_max(WAKE_MESH_SIZE, MESH_MAX, GLOBAL_GROWTH_RATE)
-    success(
-        f"[wake_refinement] MESH_SIZE={WAKE_MESH_SIZE:.6g} GROWTH_RATE={GLOBAL_GROWTH_RATE:.6g} -> "
-        f"computed transition={wake_transition:.6g} m"
+    combined_field_ids += add_wake_refinement_fields(
+        element_info, WAKE_MESH_SIZE, MESH_MAX, GLOBAL_GROWTH_RATE,
+        WAKE_X_START_CHORDS, WAKE_Y_HALF_HEIGHT_CHORDS, new_field_id
     )
 
-    for elem_info in element_info:
-        chord = elem_info["chord"]
-        te_x, _ = elem_info["te_point"]
-
-        aoa_frac = min(abs(elem_info["aoa"]), 90.0) / 90.0
-        x_length_chords = WAKE_X_LENGTH_CHORDS_AOA_0 + aoa_frac * (
-            WAKE_X_LENGTH_CHORDS_AOA_90 - WAKE_X_LENGTH_CHORDS_AOA_0
-        )
-
-        x_min = te_x + WAKE_X_START_CHORDS * chord
-        x_max = x_min + x_length_chords * chord
-        y_pad = WAKE_Y_HALF_HEIGHT_CHORDS * chord
-
-        field_id = new_field_id()
-        add_box_field(
-            field_id=field_id,
-            size_in=WAKE_MESH_SIZE,
-            size_out=MESH_MAX,
-            x_min=x_min,
-            x_max=x_max,
-            y_min=elem_info["y_min"] - y_pad,
-            y_max=elem_info["y_max"] + y_pad,
-            transition=wake_transition
-        )
-        combined_field_ids.append(field_id)
-
-# ============================================================
-# TRAILING-EDGE CORNER REFINEMENT
-# ============================================================
-# Flow accelerates sharply around each TE corner, so cell size needs to
-# taper in well below each element's own near-surface size (POINT_SIZE)
-# as the corner is approached, not just hold constant like the rest of
-# the surface. Anchored on the TE corner points (te_fan_points, only
-# populated for blunt TEs — a sharp TE has no separate corner to single
-# out) so only that region gets the extra refinement.
-
-if TE_REFINEMENT_ENABLED and te_fan_points:
-    te_dist_field_id = new_field_id()
-    add_distance_field(
-        field_id=te_dist_field_id,
-        points=te_fan_points
+if TE_REFINEMENT_ENABLED:
+    te_size_field_id = add_te_corner_refinement_field(
+        te_fan_points, TE_REFINEMENT_MESH_SIZE, TE_REFINEMENT_DIST_MAX, MESH_MAX, new_field_id
     )
-    # size_max is MESH_MAX (not any element's POINT_SIZE) deliberately:
-    # this field is combined with the others via Min, so its "far" value
-    # only needs to stop competing with them once past dist_max — it
-    # must never floor the WHOLE domain (including the farfield
-    # boundary) at a size only meant to apply right at the airfoil
-    # surface.
-    te_size_field_id = new_field_id()
-    add_threshold_field(
-        field_id=te_size_field_id,
-        in_field=te_dist_field_id,
-        size_min=TE_REFINEMENT_MESH_SIZE,
-        size_max=MESH_MAX,
-        dist_min=0.0,
-        dist_max=TE_REFINEMENT_DIST_MAX
-    )
-    combined_field_ids.append(te_size_field_id)
+    if te_size_field_id is not None:
+        combined_field_ids.append(te_size_field_id)
 
 # ============================================================
 # COMBINE SIZING FIELDS

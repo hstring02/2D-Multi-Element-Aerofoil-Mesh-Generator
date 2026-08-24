@@ -36,7 +36,7 @@ function run_case(mesh_file::String)
     end
     flow_config = TOML.parsefile(toml_file)["flow"]
 
-    mesh = UNV2D_mesh(mesh_file, scale=0.001)
+    mesh = UNV2D_mesh(mesh_file, scale=1)
     mesh_dev = adapt(BACKEND, mesh)
 
     rho = flow_config["DENSITY"]
@@ -44,8 +44,10 @@ function run_case(mesh_file::String)
     u_mag = flow_config["VELOCITY"]
     chord = flow_config["REYNOLDS_LENGTH"]
     velocity = [u_mag, 0.0, 0.0]
-    k_inlet = 1
-    ω_inlet = 1000
+    Tu = 0.05
+    nuR = 100
+    k_inlet = 3/2*(Tu*u_mag)^2
+    ω_inlet = k_inlet/(nuR*nu)
     νt_inlet = k_inlet / ω_inlet
 
     model = Physics(
@@ -102,11 +104,11 @@ function run_case(mesh_file::String)
     solvers = (
         U = SolverSetup(
             solver = Bicgstab(), preconditioner = Jacobi(),
-            convergence = 1e-7, relax = 0.7, rtol = 1e-2, atol = 1e-10
+            convergence = 1e-7, relax = 0.5, rtol = 1e-2, atol = 1e-10
         ),
         p = SolverSetup(
             solver = Cg(), preconditioner = Jacobi(),
-            convergence = 1e-7, relax = 0.3, rtol = 1e-3, atol = 1e-10
+            convergence = 1e-7, relax = 0.2, rtol = 1e-3, atol = 1e-10
         ),
         k = SolverSetup(
             solver = Bicgstab(), preconditioner = Jacobi(),
@@ -118,7 +120,7 @@ function run_case(mesh_file::String)
         )
     )
 
-    runtime = Runtime(iterations=2000, write_interval=-1, time_step=1)
+    runtime = Runtime(iterations=1000, write_interval=-1, time_step=1)
 
     config = Configuration(
         solvers=solvers, schemes=schemes, runtime=runtime, hardware=HARDWARE, boundaries=BCs)

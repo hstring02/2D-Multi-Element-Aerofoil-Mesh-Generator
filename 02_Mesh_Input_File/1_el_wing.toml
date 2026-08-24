@@ -14,14 +14,14 @@ ELEMENT = ['El_1']
 AIRFOIL_FILE = ["NACA4415_Selig.dat"]
 CHORD = [0.4]            
 POSITION = [[0.0, 0.0]]         
-AOA = [7.0]              
+AOA = [5.0]              
 TE_THICKNESS = [0.0004]   
 
 [farfield]   
-XMIN = -5.0     
-XMAX = 10.0     
-YMIN = -5.0     
-YMAX = 5.0      
+XMIN = -10.0     
+XMAX = 20.0     
+YMIN = -10.0     
+YMAX = 10.0      
 
 ## Mesh Parameters
 [visualisation]
