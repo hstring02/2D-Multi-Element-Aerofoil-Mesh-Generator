@@ -1,4 +1,4 @@
-# 2D-Multi-Element-Aerofoil-Mesh-Generator
+# 2D Multi-Element Wing Optimisation Tool
 
 ## Contents
 
