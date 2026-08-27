@@ -26,7 +26,7 @@ from MODULE_log import info, success, subtitle
 # LOAD DATA
 # ============================================================
 
-INPUT_FILE = "3_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
+INPUT_FILE = "2_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 MESH_INPUT_DIR = SCRIPT_DIR / "04_Mesh_Input_File"
