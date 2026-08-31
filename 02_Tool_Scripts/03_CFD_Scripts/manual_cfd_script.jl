@@ -4,30 +4,13 @@ using TOML
 
 grids_dir = joinpath(@__DIR__, "..", "..", "04_Meshes")
 toml_dir  = joinpath(@__DIR__, "..", "..", "01_Input_Files")
-grid = "3_el_wing.unv"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different UNV file as the first argument to this script.
 
-if length(ARGS) >= 1
-    arg_path = ARGS[1]
-    mesh_file = isempty(dirname(arg_path)) ? joinpath(grids_dir, arg_path) : arg_path
-else
-    mesh_file = joinpath(grids_dir, grid)
-end
-
-if !isfile(mesh_file)
-    error("Mesh file not found: $mesh_file")
-end
-
-case_name = splitext(basename(mesh_file))[1]
-toml_file = joinpath(toml_dir, "$(case_name).toml")
-
-if !isfile(toml_file)
-    error("Flow config file not found: $toml_file")
-end
+mesh_file = joinpath(grids_dir, "EXAMPLE_3_el_wing.unv")
+toml_file = joinpath(toml_dir, "EXAMPLE_mesh_3_el_wing.toml")
 
 toml_config = TOML.parsefile(toml_file)
 flow_config = toml_config["flow"]
 total_chord = sum(toml_config["foils"]["CHORD"]) # sum of all element chords, m (reference length for Cl/Cd normalisation)
-
 mesh = UNV2D_mesh(mesh_file, scale=1)
 
 backend = CPU(); workgroup = 1024; activate_multithread(backend)
@@ -131,7 +114,7 @@ solvers = (
     )
 )
 
-runtime = Runtime(iterations=500, write_interval=100, time_step=1)
+runtime = Runtime(iterations=1000, write_interval=100, time_step=1)
 # runtime = Runtime(iterations=2, write_interval=-1, time_step=1)
 
 config = Configuration(

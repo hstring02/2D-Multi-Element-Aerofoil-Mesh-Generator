@@ -261,13 +261,20 @@ def airfoils(data, occ, foils_dir="."):
         AIRFOIL_FILE = Path(foils_dir) / data["foils"]["AIRFOIL_FILE"][index]
         CHORD = data["foils"]["CHORD"][index]
         AOA = data["foils"]["AOA"][index]
-        # POSITION is an offset from the previous element's trailing edge
-        # (the first element has no predecessor, so its POSITION is the
-        # absolute world coordinate of its own leading edge). This way,
-        # moving an upstream element automatically carries every element
-        # downstream of it along with it.
-        OFFSET = data["foils"]["POSITION"][index]
-        POSITION = (prev_te_point[0] + OFFSET[0], prev_te_point[1] + OFFSET[1])
+        # Every element after the first is placed relative to the previous
+        # element's trailing edge: OVERLAP is how far its leading edge sits
+        # upstream of that TE (positive = overlapping), GAP_HEIGHT is the
+        # vertical offset from that TE. Both arrays have one entry per
+        # downstream element (index 0 -> element 1, etc). The first element
+        # has no predecessor, so it's always placed at the world origin.
+        # This way, moving an upstream element automatically carries every
+        # element downstream of it along with it.
+        if index == 0:
+            POSITION = (0.0, 0.0)
+        else:
+            OVERLAP = data["foils"]["OVERLAP"][index - 1]
+            GAP_HEIGHT = data["foils"]["GAP_HEIGHT"][index - 1]
+            POSITION = (prev_te_point[0] - OVERLAP, prev_te_point[1] + GAP_HEIGHT)
         # Surface point spacing scales with each element's own chord, so
         # a small flap gets proportionally finer points than a large main
         # element rather than sharing one absolute size across both.

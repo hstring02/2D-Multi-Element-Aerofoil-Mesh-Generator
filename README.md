@@ -18,7 +18,7 @@ A Python-based mesh generator that uses [Gmsh](https://gmsh.info/) to build 2D C
 Currently only supports modified .unv outputs intended for use with the XCALibre.jl CFD solver. Generic .unv and OpenFOAM coming soon.
 
 - **Multi-element geometry** — any number of aerofoil elements per case, each with its own Selig-format `.dat` coordinate file, chord, angle of attack and (optional) blunt trailing-edge thickness.
-- **Trailing-edge-relative positioning** — each element's `POSITION` is an `(x, y)` offset from the *previous* element's trailing edge, not an absolute world coordinate (the first element is the exception — its `POSITION` is absolute). Moving an upstream element automatically carries every element downstream of it along with it.
+- **Trailing-edge-relative positioning** — each element after the first is placed relative to the *previous* element's trailing edge via `OVERLAP` (how far its leading edge sits upstream of that TE; positive = overlapping) and `GAP_HEIGHT` (the vertical offset from that TE). The first element has no predecessor and is always placed at the world origin. Moving an upstream element automatically carries every element downstream of it along with it.
 - **Config-driven** — every case is defined in a single TOML file (see [`01_Input_Files`](01_Input_Files)); no code edits needed for standard runs.
 - **Boundary layer (inflation) meshing** — configurable first-layer height, growth rate and total thickness, with automatic fanning around blunt trailing-edge corners.
 - **Wake refinement** — an AOA-scaled refinement box generated per element, sized and oriented to capture each element's own shed wake.
@@ -77,7 +77,7 @@ combination:
 ### Workflow
 
 1. Add/confirm your aerofoil coordinate file(s) in `03_Foils` (Selig `.dat` format).
-2. Create or edit a unified case file in `01_Input_Files` (copy one of the `EXAMPLE_*.toml` files as a starting point) — set `[case].TYPE` (`mesh`, `cfd`, or `batch`), each element's chord, position, AOA and TE thickness, the farfield box, and any mesh-parameter overrides (everything not overridden is inherited from `01_Input_Files/Best_Practice_Parameters/`). Remember `POSITION` is trailing-edge-relative for every element after the first (see [Mesher](#mesher-02_tool_scripts02_meshing_script) above) — it's an offset from the previous element's TE, not a world coordinate.
+2. Create or edit a unified case file in `01_Input_Files` (copy one of the `EXAMPLE_*.toml` files as a starting point) — set `[case].TYPE` (`mesh`, `cfd`, or `batch`), each element's chord, overlap/gap height, AOA and TE thickness, the farfield box, and any mesh-parameter overrides (everything not overridden is inherited from `01_Input_Files/Best_Practice_Parameters/`). Remember `OVERLAP`/`GAP_HEIGHT` are trailing-edge-relative for every element after the first (see [Mesher](#mesher-02_tool_scripts02_meshing_script) above) — one entry per downstream element, offset from the previous element's TE, not a world coordinate.
 3. Run it:
    ```
    python RUN_CASE.py your_case.toml

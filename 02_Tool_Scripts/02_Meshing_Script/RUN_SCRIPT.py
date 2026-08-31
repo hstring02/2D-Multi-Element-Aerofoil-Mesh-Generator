@@ -5,17 +5,17 @@
 import re
 import sys
 from pathlib import Path
-import toml
 import gmsh
 
 # CUSTOM FUNCTIONS
 from MODULE_airfoil import read_transform_airfoil, build_airfoil, airfoils
 from MODULE_geometry import build_farfield, subtract_airfoil
+from MODULE_inputs import load_case_with_defaults
 from MODULE_output import output_unv_xcalibre
 from MODULE_mesh import (
     get_airfoil_curves, set_background_field, add_boundary_layer_field,
     set_boundary_layer_field, get_straight_line_curves, enforce_cells_on_curves,
-    get_curve_endpoints, add_min_field, compute_first_layer_height,
+    get_curve_endpoints, add_min_field,
     classify_curves_by_points, clamp_boundary_layer_thickness,
     add_near_surface_fields, add_wake_refinement_fields,
     add_te_corner_refinement_field
@@ -26,75 +26,46 @@ from MODULE_log import info, success, subtitle
 # LOAD DATA
 # ============================================================
 
-INPUT_FILE = "2_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
+INPUT_FILE = "EXAMPLE_mesh_3_el_wing.toml"    # Defaults to this if no command-line argument is provided. Can be overridden by passing a path to a different TOML file as the first argument to this script.
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent
 MESH_INPUT_DIR = SCRIPT_DIR / "01_Input_Files"
+DEFAULTS_DIR = MESH_INPUT_DIR / "Best_Practice_Parameters"
 
 if len(sys.argv) > 1:
     arg_path = Path(sys.argv[1])
     CONFIG_PATH = arg_path if arg_path.parent != Path(".") else MESH_INPUT_DIR / arg_path
 else:
     CONFIG_PATH = MESH_INPUT_DIR / INPUT_FILE
-
 if not CONFIG_PATH.is_file():
     raise FileNotFoundError(f"Mesh input file not found: {CONFIG_PATH}")
 
-data = toml.load(CONFIG_PATH)
-
-FOILS_DIR = SCRIPT_DIR / "03_Foils"
-
-XMIN = data["farfield"]["XMIN"]
-XMAX = data["farfield"]["XMAX"]
-YMIN = data["farfield"]["YMIN"]
-YMAX = data["farfield"]["YMAX"]
-MESH_MAX = data["global_refinement"]["MESH_MAX"]
-GLOBAL_GROWTH_RATE = data["global_refinement"]["GROWTH_RATE"]
-TE_CELLS = data["global_refinement"].get("TE_CELLS", 3)
-MAX_CURVATURE_ANGLE = data["global_refinement"].get("MAX_CURVATURE_ANGLE", 360.0)
-TE_FAN_ELEMENTS = data["global_refinement"].get("TE_FAN_ELEMENTS", 5)
+data = load_case_with_defaults(CONFIG_PATH, DEFAULTS_DIR)
+FARFIELD = data.get("farfield", {})
+XMIN                        = FARFIELD.get("XMIN")
+XMAX                        = FARFIELD.get("XMAX")
+YMIN                        = FARFIELD.get("YMIN")
+YMAX                        = FARFIELD.get("YMAX")
+GLOBAL_REFINEMENT = data.get("global_refinement", {})
+MESH_MAX                    = GLOBAL_REFINEMENT.get("MESH_MAX")
+GLOBAL_GROWTH_RATE          = GLOBAL_REFINEMENT.get("GROWTH_RATE")
+TE_CELLS                    = GLOBAL_REFINEMENT.get("TE_CELLS")
+MAX_CURVATURE_ANGLE         = GLOBAL_REFINEMENT.get("MAX_CURVATURE_ANGLE")
+TE_FAN_ELEMENTS             = GLOBAL_REFINEMENT.get("TE_FAN_ELEMENTS")
 BL_CONFIG = data.get("boundary_layer", {})
-BL_ENABLED = BL_CONFIG.get("ENABLED", False)
-BL_GROWTH_RATE = BL_CONFIG.get("GROWTH_RATE")
-BL_THICKNESS = BL_CONFIG.get("THICKNESS")
-
-DIST_MIN = BL_THICKNESS if BL_ENABLED else 0.0
-
-if BL_ENABLED:
-    FLOW_CONFIG = data.get("flow", {})
-    missing_flow_keys = [
-        key for key in ("DENSITY", "VELOCITY", "VISCOSITY", "REYNOLDS_LENGTH", "Y_PLUS")
-        if key not in FLOW_CONFIG
-    ]
-    if missing_flow_keys:
-        raise ValueError(
-            f"boundary_layer is ENABLED but [flow] is missing: {', '.join(missing_flow_keys)}"
-        )
-
-    BL_FIRST_LAYER_HEIGHT = compute_first_layer_height(
-        density=FLOW_CONFIG["DENSITY"],
-        velocity=FLOW_CONFIG["VELOCITY"],
-        viscosity=FLOW_CONFIG["VISCOSITY"],
-        ref_length=FLOW_CONFIG["REYNOLDS_LENGTH"],
-        y_plus=FLOW_CONFIG["Y_PLUS"],
-    )
-    success(
-        f"[boundary_layer] target y+={FLOW_CONFIG['Y_PLUS']:.6g} -> "
-        f"computed FIRST_LAYER_HEIGHT={BL_FIRST_LAYER_HEIGHT:.6g} m"
-    )
-else:
-    BL_FIRST_LAYER_HEIGHT = None
-
+BL_ENABLED                  = BL_CONFIG.get("ENABLED", False)
+BL_GROWTH_RATE              = BL_CONFIG.get("GROWTH_RATE")
+BL_THICKNESS                = BL_CONFIG.get("THICKNESS")
+BL_FIRST_LAYER_HEIGHT       = BL_CONFIG.get("FIRST_LAYER_HEIGHT")
 WAKE_CONFIG = data.get("wake_refinement", {})
-WAKE_ENABLED = WAKE_CONFIG.get("ENABLED", False)
-WAKE_MESH_SIZE = WAKE_CONFIG.get("MESH_SIZE")
-WAKE_X_START_CHORDS = WAKE_CONFIG.get("X_START_CHORDS", 0.1)
-WAKE_Y_HALF_HEIGHT_CHORDS = WAKE_CONFIG.get("Y_HALF_HEIGHT_CHORDS", 0.5)
-
+WAKE_ENABLED                = WAKE_CONFIG.get("ENABLED", False)
+WAKE_MESH_SIZE              = WAKE_CONFIG.get("MESH_SIZE")
+WAKE_X_START_CHORDS         = WAKE_CONFIG.get("X_START_CHORDS")
+WAKE_Y_HALF_HEIGHT_CHORDS   = WAKE_CONFIG.get("Y_HALF_HEIGHT_CHORDS")
 TE_CONFIG = data.get("te_refinement", {})
-TE_REFINEMENT_ENABLED = TE_CONFIG.get("ENABLED", False)
-TE_REFINEMENT_MESH_SIZE = TE_CONFIG.get("MESH_SIZE")
-TE_REFINEMENT_DIST_MAX = TE_CONFIG.get("DIST_MAX")
+TE_REFINEMENT_ENABLED       = TE_CONFIG.get("ENABLED", False)
+TE_REFINEMENT_MESH_SIZE     = TE_CONFIG.get("MESH_SIZE")
+TE_REFINEMENT_DIST_MAX      = TE_CONFIG.get("DIST_MAX")
 
 # ============================================================
 # BUILD AIRFOIL
@@ -104,50 +75,32 @@ gmsh.initialize()
 gmsh.model.add("FSAE_Airfoil")
 occ = gmsh.model.occ
 
+FOILS_DIR = SCRIPT_DIR / "03_Foils"
 airfoil_surfaces, element_info = airfoils(data, occ, FOILS_DIR)    # Reads airfoil data points, builds curves and returns surfaces + per-element chord/TE info
 
 if BL_ENABLED:
     BL_THICKNESS = clamp_boundary_layer_thickness(element_info, BL_THICKNESS, BL_FIRST_LAYER_HEIGHT)
     DIST_MIN = BL_THICKNESS
+else:
+    DIST_MIN = 0.0
 
 # ============================================================
 # BUILD FARFIELD
 # ============================================================
 
-farfield_surface, farfield_lines = build_farfield(
-    occ,
-    XMIN,
-    XMAX,
-    YMIN,
-    YMAX,
-    MESH_MAX  
-)
-
-farfield_corners = [        # Snap farfield corner coordinates so we can re-identify them post-cut
-    (XMIN, YMIN),
-    (XMAX, YMIN),
-    (XMAX, YMAX),
-    (XMIN, YMAX),
-]
+farfield_surface, farfield_lines = build_farfield(occ, XMIN, XMAX, YMIN, YMAX, MESH_MAX)
+farfield_corners = [(XMIN, YMIN),(XMAX, YMIN),(XMAX, YMAX),(XMIN, YMAX)]
 
 for index, surfaces in enumerate(airfoil_surfaces):
-    
     airfoil_surface = surfaces
-
-    fluid_dim_tag = subtract_airfoil(
-        occ,
-        farfield_surface,
-        airfoil_surface
-    )
+    fluid_dim_tag = subtract_airfoil(occ, farfield_surface, airfoil_surface)
 
 occ.synchronize()
-
 
 fluid_surface_tag = fluid_dim_tag[1]    # Extract the surface tag integer from the tuple
 all_fluid_curves = get_airfoil_curves(fluid_surface_tag)
 
 CORNER_TOL = 1e-6
-
 def point_is_farfield_corner(x, y):
     for cx, cy in farfield_corners:
         if abs(x - cx) < CORNER_TOL and abs(y - cy) < CORNER_TOL:
@@ -185,7 +138,6 @@ if len(farfield_boundary_curves) != 4:
         f"Expected 4 farfield curves but found {len(farfield_boundary_curves)}. "
         "The farfield rectangle may have been fragmented by the boolean cut."
     )
-
 
 # IDENTIFY INDIVIDUAL FARFIELD WALLS
 def curve_midpoint(curve_tag):
@@ -328,7 +280,7 @@ gmsh.model.mesh.generate(2)     # Generate 2D mesh for the fluid domain
 # EXPORT OPTIONS
 # ============================================================
 
-output_filename = data["title"]
+output_filename = data["case"]["TITLE"]
 if not output_filename.lower().endswith(".unv"):
     output_filename += ".unv"
 output_unv_xcalibre(output_filename)
@@ -350,6 +302,6 @@ info(f"  farfield : curves {[top_curve, bottom_curve]}")
 # VISUALISATION
 # ============================================================
 
-if data.get("visualisation", {}).get("ENABLED", False):
+if data.get("mesh_settings", {}).get("VISUALISATION", False):
     gmsh.fltk.run()
     gmsh.finalize()

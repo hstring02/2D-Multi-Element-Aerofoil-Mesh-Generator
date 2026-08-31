@@ -1,6 +1,10 @@
 [case]
-TYPE = "mesh"
+TYPE = "batch"
 TITLE = "EXAMPLE_3_el_wing"
+
+[batch]
+sweep_keys = ["foils.AOA.0", "foils.GAP_HEIGHT.0"]
+sweep_values = [[-7.0, -6.0, -5.0, -4.0, -3.0, -2.0], [0.015, 0.02, 0.025, 0.03, 0.035]]
 
 [flow]
 DENSITY = 1.225
@@ -13,9 +17,9 @@ Y_PLUS = 1.0
 ELEMENT = ['El_1', 'El_2','EL_3']
 AIRFOIL_FILE = ["AH_79-100_B_Inverted_Selig.dat", "AH_79-100_B_Inverted_Selig.dat", "AH_79-100_B_Inverted_Selig.dat"]
 CHORD = [0.4, 0.2, 0.15]
-OVERLAP = [0.045, 0.04]       # El_1 is at the world origin; each later element overlaps the previous element's TE by this much (positive = overlapping)
-GAP_HEIGHT = [0.035, 0.015]  # vertical offset from the previous element's TE
-AOA = [-2.0, -25.0, -45.0]            
+OVERLAP = [0.045, 0.04]      # El_1 is at the world origin; each later element overlaps the previous element's TE by this much (positive = overlapping)
+GAP_HEIGHT = [0.02, 0.0017]  # vertical offset from the previous element's TE
+AOA = [-3.0, -25.0, -45.0]            
 TE_THICKNESS = [0.0004, 0.0002, 0.00015]  
 
 [farfield]
@@ -26,13 +30,8 @@ YMAX = 10.0
 
 [mesh_settings]
 DEFAULTS = "multi_element_mesh_parameters.toml"
-VISUALISATION = true
-SAVE_MESH = true
-
-[global_refinement]
-MESH_MAX = 5.0
-CELLS_PER_CHORD = 40
-GROWTH_RATE = 1.3
+VISUALISATION = false
+SAVE_MESH = false
 
 [te_refinement]
 ENABLED = false
