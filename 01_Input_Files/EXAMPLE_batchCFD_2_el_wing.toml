@@ -1,0 +1,37 @@
+[case]
+TYPE = "batch"
+TITLE = "EXAMPLE_2_el_wing"
+
+[batch]
+sweep_keys = ["foils.AOA.0", "foils.GAP_HEIGHT.0"]
+sweep_values = [[-4.0, -3.5, -3.0, -2.5, -2.0, -1.0], [0.0075, 0.0125, 0.0175, 0.0225, 0.0275]]
+
+[flow]
+DENSITY = 1.225
+VELOCITY = 13.5
+VISCOSITY = 1.81e-5
+REYNOLDS_LENGTH = 1.4
+Y_PLUS = 1.0
+
+[foils]
+ELEMENT = ['El_1', 'El_2']
+AIRFOIL_FILE = ["AH_79-100_B_Inverted_Selig.dat", "AH_79-100_B_Inverted_Selig.dat"]
+CHORD = [0.4, 0.2]
+OVERLAP = [0.047]        # El_1 is at the world origin; each later element overlaps the previous element's TE by this much (positive = overlapping)
+GAP_HEIGHT = [0.009]     # vertical offset from the previous element's TE
+AOA = [0.0, -30.0]            
+TE_THICKNESS = [0.0004, 0.0002]  
+
+[farfield]
+XMIN = -10.0
+XMAX = 20.0
+YMIN = -10.0
+YMAX = 10.0
+
+[mesh_settings]
+DEFAULTS = "multi_element_mesh_parameters.toml"
+VISUALISATION = false
+SAVE_MESH = false
+
+[te_refinement]
+ENABLED = false

@@ -1,4 +1,0 @@
-base_case = "04_Mesh_Input_File/2_el_wing.toml"
-
-sweep_key = "foils.POSITION.1.1"
-sweep_values = [0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015, 0.0175]
